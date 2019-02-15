@@ -17,6 +17,8 @@ ENV LANG en_US.UTF-8
 
 ENV TZ=$timezone
 RUN apt-get -y install sudo
+RUN apt-get -y install python3-tk
+RUN apt-get -y install graphviz
 
 RUN useradd -ms /bin/bash docker
 RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
