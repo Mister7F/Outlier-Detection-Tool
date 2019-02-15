@@ -10,6 +10,7 @@ from helpers.notifier import Notifier
 from collections import defaultdict
 from itertools import chain
 from functools import reduce
+import dateutil.parser
 
 @singleton
 class ES:
@@ -246,39 +247,40 @@ class ES:
         '''
         Params
         ======
-        - profile_field (str)   : Field used to determin profile (user for example)
+        - profile_field   (str) : Field used to determin profile (user for example)
         - item_identifier (str) : List of fields used to identify an item (a process for example)
-        - lucene_query          : Sent to es.scan
         - query_fields          : Sent to es.scan
+        - lucene_query          : Sent to es.scan
+
+        Return
+        ======
+        - events          (dic) : {'<profile>': {'<item_identifier>': ItemLife(), ...}, ...}
         '''
+        class ItemLife:
+            def __init__(self, fields, start):
+                self.fields = fields
+                self.start = start
+                self.end = start
+
+            @property
+            def duration(self):
+                return self.end-self.start
+
+            def __str__(self):
+                return '[%s - %s] %s' % (
+                                            str(self.start.strftime("%Y-%m-%d %H:%M:%S")),
+                                            str(self.duration),
+                                            str(self.fields)[:40]+'...'
+                                        )
 
         timestamp_field = self.settings.config.get("general", "timestamp_field")
 
         # Add fields needed... (profile_field, item_identifier and timestamp)
         if query_fields: 
-            if timestamp_field not in query_fields:
-                query_fields.append(timestamp_field)
-            if profile_field not in query_fields:
-                query_fields.append(profile_field)
-            for i in items_identifier:
+            for i in [timestamp_field, profile_field, *items_identifier]:
                 if i not in query_fields:
                     query_fields.append(i)
 
-        class ItemLife:
-            def __init__(self, fields, start):
-                self.fields = fields
-                self.start = start
-                self.end = None
-            def __str__(self):
-                return '[%s - %s] %s' % (str(self.start), str(self.end), str(self.fields)[:40]+'...')
-
-        '''
-        events = { 
-            '<profile_identifier>' : { 
-                '<item_identifier_hash>' : ItemLife
-            } , ...
-        }
-        '''
         events = {}
         
         for doc in self.scan(lucene_query=lucene_query, query_fields=query_fields, time_sorted=True):
@@ -293,10 +295,10 @@ class ES:
             item_hash = hash(frozenset(item_identifier))
 
             if item_hash not in events[profile_identifier]:
-                events[profile_identifier][item_hash] = ItemLife(fields, fields[timestamp_field])
+                events[profile_identifier][item_hash] = ItemLife(fields, dateutil.parser.parse(fields[timestamp_field]))
 
             else:
-                events[profile_identifier][item_hash].end = fields[timestamp_field]
+                events[profile_identifier][item_hash].end = dateutil.parser.parse(fields[timestamp_field])
         
         return events
 

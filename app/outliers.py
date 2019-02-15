@@ -60,27 +60,6 @@ def perform_analysis():
     sentence_prediction_generic.perform_analysis()
     '''
 
-    
-    es_query_filter = settings.config.get('time_based_storage', 'es_query_filter')
-    profile_field = settings.config.get('time_based_storage', 'profile_field')
-    item_identifier = settings.config.get('time_based_storage', 'item_identifier').split(',')
-    print(es_query_filter)
-    lucene_query = es.filter_by_query_string(es_query_filter)
-
-    # Show results
-    events = es.time_based_scan(
-                        profile_field,
-                        item_identifier,
-                        query_fields=['OsqueryFilter.name'],
-                        lucene_query=lucene_query
-                      )
-    for k in events:
-        logging.logger.info('Profile: ' + k)
-
-        for item in events[k]:
-            logging.logger.info('\t Item: ' + str(events[k][item]))
-    
-
 
 # Prepare log messages
 search_start_range_printable = dateutil.parser.parse(settings.search_range_start).strftime('%Y-%m-%d %H:%M:%S')
