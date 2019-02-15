@@ -1,5 +1,9 @@
 scikit-learn==0.19.1
 tensorflow==1.8.0
+keras
+matplotlib
+pydot
+graphviz
 certifi==2017.7.27.1
 chardet==3.0.4
 configparser==3.5.0
@@ -34,4 +38,3 @@ tld==0.9.1
 validators==0.12.2
 pygrok==1.0.0
 py-spy==0.1.5
-flake8==3.7.5

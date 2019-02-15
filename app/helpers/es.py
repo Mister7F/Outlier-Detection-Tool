@@ -9,7 +9,8 @@ from helpers.singleton import singleton
 from helpers.notifier import Notifier
 from collections import defaultdict
 from itertools import chain
-
+from functools import reduce
+import dateutil.parser
 
 @singleton
 class ES:
@@ -39,10 +40,6 @@ class ES:
 
         return self.conn
 
-    def scan(self, bool_clause=None, sort_clause=None, query_fields=None, lucene_query=None):
-        preserve_order = True if sort_clause is not None else False
-        return eshelpers.scan(self.conn, request_timeout=self.settings.config.getint("general", "es_timeout"), index=self.settings.config.get("general", "es_index_pattern"), query=build_search_query(bool_clause=bool_clause, sort_clause=sort_clause, search_range=self.settings.search_range, query_fields=query_fields, lucene_query=lucene_query), size=self.settings.config.getint("general", "es_scan_size"), scroll=self.settings.config.get("general", "es_scroll_time"), preserve_order=preserve_order, raise_on_error=True,)
-
     def count_documents(self, bool_clause=None, query_fields=None, lucene_query=None):
         res = self.conn.search(index=self.index, body=build_search_query(bool_clause=bool_clause, search_range=self.settings.search_range, query_fields=query_fields, lucene_query=lucene_query), size=self.settings.config.getint("general", "es_scan_size"), scroll=self.settings.config.get("general", "es_scroll_time"))
         return res["hits"]["total"]
@@ -56,7 +53,7 @@ class ES:
 
     def filter_by_query_string(self, query=None):
         bool_clause = {"must": [
-            {"query_string": {"query": query}}
+            {"query_string": { "query": query}}
         ]}
         return bool_clause
 
@@ -146,7 +143,7 @@ class ES:
                     self.notifier.notify_on_outlier(doc=doc, outlier=outlier)
 
                 if self.settings.config.getboolean("general", "print_outliers_to_console"):
-                    self.logging.logger.info("outlier - " + outlier.get_summary())
+                        self.logging.logger.info("outlier - " + outlier.get_summary())
 
     def save_outlier(self, doc=None, outlier=None):
         # add the derived fields as outlier observations
@@ -204,6 +201,107 @@ class ES:
         ]}
         return bool_clause
 
+    def get_field_by_path(self, doc, path):
+        '''
+        Return the field using the path
+        expl: OsqueryFilter.name
+        '''
+        fields = self.extract_fields_from_document(doc)
+        field = reduce((lambda x, y: x[y]), [fields, *path.split('.')])
+        return field
+
+    def get_fields_by_path(self, doc, paths):
+        '''
+        Return a list of fields from a list of paths
+        '''
+        fields = self.extract_fields_from_document(doc)
+
+        return [reduce((lambda x, y: x[y]), [fields, *path.split('.')]) for path in paths]
+
+    def scan(self, bool_clause=None, sort_clause=None, query_fields=None, lucene_query=None, time_sorted=False):
+        # https://elasticsearch-py.readthedocs.io/en/master/helpers.html#scan
+        preserve_order = True if sort_clause is not None else False
+
+
+        query = query=build_search_query(
+                                            bool_clause=bool_clause, 
+                                            sort_clause=sort_clause, 
+                                            search_range=self.settings.search_range, 
+                                            query_fields=query_fields, 
+                                            lucene_query=lucene_query)
+        if time_sorted:
+            preserve_order = True
+            query['sort'] = [{self.settings.config.get("general", "timestamp_field"):{"order": "asc"}}]
+
+        return eshelpers.scan(
+                                self.conn, 
+                                request_timeout=self.settings.config.getint("general", "es_timeout"), 
+                                index=self.settings.config.get("general", "es_index_pattern"), 
+                                query=query, 
+                                size=self.settings.config.getint("general", "es_scan_size"), 
+                                scroll=self.settings.config.get("general", "es_scroll_time"), 
+                                preserve_order=preserve_order, raise_on_error=True
+                            )
+
+    def time_based_scan(self, profile_field, items_identifier, query_fields=None, lucene_query=None):
+        '''
+        Params
+        ======
+        - profile_field   (str) : Field used to determin profile (user for example)
+        - item_identifier (str) : List of fields used to identify an item (a process for example)
+        - query_fields          : Sent to es.scan
+        - lucene_query          : Sent to es.scan
+
+        Return
+        ======
+        - events          (dic) : {'<profile>': {'<item_identifier>': ItemLife(), ...}, ...}
+        '''
+        class ItemLife:
+            def __init__(self, fields, start):
+                self.fields = fields
+                self.start = start
+                self.end = start
+
+            @property
+            def duration(self):
+                return self.end-self.start
+
+            def __str__(self):
+                return '[%s - %s] %s' % (
+                                            str(self.start.strftime("%Y-%m-%d %H:%M:%S")),
+                                            str(self.duration),
+                                            str(self.fields)[:40]+'...'
+                                        )
+
+        timestamp_field = self.settings.config.get("general", "timestamp_field")
+
+        # Add fields needed... (profile_field, item_identifier and timestamp)
+        if query_fields: 
+            for i in [timestamp_field, profile_field, *items_identifier]:
+                if i not in query_fields:
+                    query_fields.append(i)
+
+        events = {}
+        
+        for doc in self.scan(lucene_query=lucene_query, query_fields=query_fields, time_sorted=True):
+            
+            fields = self.extract_fields_from_document(doc)            
+            profile_identifier = self.get_field_by_path(doc, profile_field)
+            
+            if profile_identifier not in events:
+                events[profile_identifier] = {}
+
+            item_identifier = self.get_fields_by_path(doc, items_identifier)
+            item_hash = hash(frozenset(item_identifier))
+
+            if item_hash not in events[profile_identifier]:
+                events[profile_identifier][item_hash] = ItemLife(fields, dateutil.parser.parse(fields[timestamp_field]))
+
+            else:
+                events[profile_identifier][item_hash].end = dateutil.parser.parse(fields[timestamp_field])
+        
+        return events
+
 
 def add_outlier_to_document(doc, outlier):
     doc = add_tag_to_document(doc, "outlier")
@@ -257,7 +355,12 @@ def remove_tag_from_document(doc, tag):
     return doc
 
 
-def build_search_query(bool_clause=None, sort_clause=None, search_range=None, query_fields=None, lucene_query=None):
+def build_search_query(
+                        bool_clause=None, 
+                        sort_clause=None,
+                        search_range=None,
+                        query_fields=None,
+                        lucene_query=None):
     query = dict()
     query["query"] = dict()
     query["query"]["bool"] = dict()
@@ -300,3 +403,5 @@ def get_time_filter(days=None, hours=None, timestamp_field="timestamp"):
         }
     }
     return time_filter
+
+
