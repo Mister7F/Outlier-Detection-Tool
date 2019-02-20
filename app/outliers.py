@@ -23,6 +23,10 @@ from analyzers import autoencoder_generic
 from analyzers import clustering_str_k_mean_generic
 from analyzers import sentence_prediction_generic
 from analyzers import decision_tree_generic
+from analyzers import anormal_duration_generic
+
+
+
 ##############
 # Entrypoint #
 ##############
@@ -45,7 +49,7 @@ logging.print_generic_intro("initializing")
 
 
 def perform_analysis():
-    '''
+    '''sudo -i service elasticsearch start
     test_generic.perform_analysis()
     beaconing_generic.perform_analysis()
     metrics_generic.perform_analysis()
@@ -59,6 +63,8 @@ def perform_analysis():
     decision_tree_generic.perform_analysis()
     sentence_prediction_generic.perform_analysis()
     '''
+
+    anormal_duration_generic.perform_analysis()
 
 
 # Prepare log messages

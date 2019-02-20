@@ -218,20 +218,20 @@ class ES:
 
         return [reduce((lambda x, y: x[y]), [fields, *path.split('.')]) for path in paths]
 
-    def scan(self, bool_clause=None, sort_clause=None, query_fields=None, lucene_query=None, time_sorted=False):
+    def scan(self, bool_clause=None, sort_clause=None, query_fields=None, lucene_query=None, sort=None):
         # https://elasticsearch-py.readthedocs.io/en/master/helpers.html#scan
         preserve_order = True if sort_clause is not None else False
 
-
-        query = query=build_search_query(
-                                            bool_clause=bool_clause, 
-                                            sort_clause=sort_clause, 
-                                            search_range=self.settings.search_range, 
-                                            query_fields=query_fields, 
-                                            lucene_query=lucene_query)
-        if time_sorted:
+        query = build_search_query(
+                                    bool_clause=bool_clause, 
+                                    sort_clause=sort_clause, 
+                                    search_range=self.settings.search_range, 
+                                    query_fields=query_fields, 
+                                    lucene_query=lucene_query)
+        
+        if sort:
             preserve_order = True
-            query['sort'] = [{self.settings.config.get("general", "timestamp_field"):{"order": "asc"}}]
+            query['sort'] = [{v : {"order": "asc"}} for v in sort]
 
         return eshelpers.scan(
                                 self.conn, 
@@ -240,67 +240,88 @@ class ES:
                                 query=query, 
                                 size=self.settings.config.getint("general", "es_scan_size"), 
                                 scroll=self.settings.config.get("general", "es_scroll_time"), 
-                                preserve_order=preserve_order, raise_on_error=True
+                                preserve_order=preserve_order, raise_on_error=True,
+                                terminate_after=self.settings.config.get("general", "es_terminate_after")
                             )
 
-    def time_based_scan(self, profile_field, items_identifier, query_fields=None, lucene_query=None):
+    def time_based_scan(self, aggregator, item_identifiers, query_fields=None, lucene_query=None):
         '''
         Params
         ======
-        - profile_field   (str) : Field used to determin profile (user for example)
+        - aggregator      (str) : Field used to group items
         - item_identifier (str) : List of fields used to identify an item (a process for example)
-        - query_fields          : Sent to es.scan
-        - lucene_query          : Sent to es.scan
+        - query_fields          : Send to es.scan
+        - lucene_query          : Send to es.scan
+        
+        Usage
+        =====
+        for aggregation, documents in time_based_scan(...):
+            for doc, start, duration in documents:
+                pass
 
-        Return
-        ======
-        - events          (dic) : {'<profile>': {'<item_identifier>': ItemLife(), ...}, ...}
+        The document yielded is the first of the time serie
         '''
-        class ItemLife:
-            def __init__(self, fields, start):
-                self.fields = fields
-                self.start = start
-                self.end = start
-
-            @property
-            def duration(self):
-                return self.end-self.start
-
-            def __str__(self):
-                return '[%s - %s] %s' % (
-                                            str(self.start.strftime("%Y-%m-%d %H:%M:%S")),
-                                            str(self.duration),
-                                            str(self.fields)[:40]+'...'
-                                        )
-
         timestamp_field = self.settings.config.get("general", "timestamp_field")
 
-        # Add fields needed... (profile_field, item_identifier and timestamp)
-        if query_fields: 
-            for i in [timestamp_field, profile_field, *items_identifier]:
+        # Add fields needed... (aggregator, item_identifier and timestamp)
+        if query_fields is not None: 
+            for i in [timestamp_field, aggregator, *item_identifiers]:
                 if i not in query_fields:
                     query_fields.append(i)
 
-        events = {}
-        
-        for doc in self.scan(lucene_query=lucene_query, query_fields=query_fields, time_sorted=True):
-            
+        def _agg_and_item(doc):
+            # Return the aggregator value, the item hash and the timestamp of the document
             fields = self.extract_fields_from_document(doc)            
-            profile_identifier = self.get_field_by_path(doc, profile_field)
-            
-            if profile_identifier not in events:
-                events[profile_identifier] = {}
-
-            item_identifier = self.get_fields_by_path(doc, items_identifier)
+            agg, *item_identifier = self.get_fields_by_path(doc, [aggregator] + item_identifiers)                
+            agg = agg[:15]
             item_hash = hash(frozenset(item_identifier))
+            timestamp = dateutil.parser.parse(fields[timestamp_field])
+            return agg, item_hash, timestamp
 
-            if item_hash not in events[profile_identifier]:
-                events[profile_identifier][item_hash] = ItemLife(fields, dateutil.parser.parse(fields[timestamp_field]))
+        def aggr_gen():
+            # Generator over documents inside the aggregation
+            prev_document = aggr_gen.doc
+            prev_timestamp = aggr_gen.timestamp
 
-            else:
-                events[profile_identifier][item_hash].end = dateutil.parser.parse(fields[timestamp_field])
+            for doc in aggr_gen.es_scan:
+                agg, item_hash, timestamp = _agg_and_item(doc)
+
+                # New item
+                if item_hash != aggr_gen.item_hash:
+                    # yield the previous item
+                    duration = (prev_timestamp - aggr_gen.timestamp).total_seconds()
+                    yield aggr_gen.doc, aggr_gen.timestamp, duration
+                    # initialise information about the new one
+                    aggr_gen.item_hash = item_hash
+                    aggr_gen.timestamp = timestamp
+                    aggr_gen.doc = doc
+                
+                # New aggregation
+                if agg != aggr_gen.agg:
+                    aggr_gen.agg = agg
+                    return
+
+                prev_document = doc
+                prev_timestamp = timestamp
+
+            # yield the last document
+            duration = (prev_timestamp - aggr_gen.timestamp).total_seconds()
+            yield aggr_gen.doc, aggr_gen.timestamp, duration
+
+            # Stop the main loop
+            aggr_gen.stop = True
+
+        # Generator, documents are sorted by: aggregator - item_identifiers - timestamp
+        sort = [aggregator + '.keyword', *[i + '.keyword' for i in item_identifiers], timestamp_field]
+        aggr_gen.es_scan = self.scan(lucene_query=lucene_query, query_fields=query_fields, sort=sort)
         
-        return events
+        # Initialize iteration
+        aggr_gen.doc = next(aggr_gen.es_scan)
+        aggr_gen.agg, aggr_gen.item_hash, aggr_gen.timestamp = _agg_and_item(aggr_gen.doc)
+        aggr_gen.stop = False
+
+        while not aggr_gen.stop:
+            yield aggr_gen.agg, aggr_gen()
 
 
 def add_outlier_to_document(doc, outlier):

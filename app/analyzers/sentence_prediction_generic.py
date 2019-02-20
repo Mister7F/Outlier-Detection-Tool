@@ -12,15 +12,6 @@ from keras import Model
 from keras.models import Sequential
 from keras.layers import *
 
-'''
-How does it work ?
-
-Take two features
-	- One as input, this feature will be onehot encoded
-	- One as output, this feature is text
-	  The text will be splitted into words and words
-	  will be vectorized
-'''
 
 def extract_model_settings(section_name):
 	model_settings = dict()
@@ -35,10 +26,7 @@ def extract_model_settings(section_name):
 	model_settings["tokenizer_split_path"] = settings.config.get(section_name, "tokenizer_split_path").split(',')
 	model_settings["tokenizer_max_dic_size"] = settings.config.getint(section_name, "tokenizer_max_dic_size")
 	model_settings["path_regex"] = settings.config.get(section_name, "path_regex")
-	model_settings["path_truncation"] = settings.config.getint(section_name, "path_truncation")	
-
-	model_settings["layers"] = [int(i) for i in settings.config.get(section_name, "layers").split(',')]
-	model_settings["epochs"] = settings.config.getint(section_name, "epochs")
+	model_settings["path_truncation"] = settings.config.getint(section_name, "path_truncation")
 	
 	return model_settings
 
@@ -57,7 +45,7 @@ def perform_analysis():
 		total_events = es.count_documents(lucene_query=lucene_query)
 
 		logging.logger.info('Total events %i'%total_events)
-
+		
 		fields = [model_settings["aggregator"], model_settings["target"]]
 
 		dataset = np.array([
@@ -65,10 +53,20 @@ def perform_analysis():
 			for doc in es.scan(lucene_query=lucene_query, query_fields=fields)
 		]).astype('object')
 
-
-
 		# Change each process by an id
 		x_data, process_dic = class_to_id(dataset[:, 0], return_dic=True)
+
+		'''
+		Let's inject some anomalies
+		'''
+		logging.logger.info('----> ' + dataset[2, 0])
+		dataset[2, 1] = 'This/is/a/wrong/path/This/is/a/wrong/path'
+		logging.logger.info('----> ' + dataset[49, 0])
+		dataset[49, 1] = 'Dangerous/Malware/This/path/is/anormal/I/think'
+		logging.logger.info('----> ' + dataset[50, 0])
+		dataset[50, 1] = 'Desktop/mymalware/supermalware'
+		logging.logger.info('----> ' + dataset[51, 0])
+		dataset[51, 1] = 'C://Bureau/wrong_directory/badpath'
 
 		# Extact path from command line
 		for i in range(dataset.shape[0]):
@@ -78,18 +76,7 @@ def perform_analysis():
 				dataset[i, 1] = groups[0][0]
 			else:
 				dataset[i, 1] = 'no_regex_match - ' + dataset[i, 1]
-
-		'''
-		Let's inject some anomalies
-		'''
-		logging.logger.info('----> ' + dataset[2, 0])
-		dataset[2, 1] = 'False/command/linE/False/command/linE/False/command/linE/False/command/linE/'
-		logging.logger.info('----> ' + dataset[49, 0])
-		dataset[49, 1] = 'ThisLineSoentExists/ThisLineSoentExists/ThisLineSoentExists'
-		logging.logger.info('----> ' + dataset[50, 0])
-		dataset[50, 1] = 'Desktop/mymalware/supermalware'
-		logging.logger.info('----> ' + dataset[51, 0])
-		dataset[51, 1] = 'C://Bureau/wrong_directory'
+	
 
 		# Tokenize sentences, split in words and replace each words by an id
 		tokenizer = Tokenizer(
@@ -134,9 +121,8 @@ def perform_analysis():
 		
 
 		input = Input(shape=(1,), name='process_id')
-		embed = Embedding(x_data.max()+1, 128, input_length=1, name='process_vectors')(input)
+		embed = Embedding(x_data.max()+1, 1024, input_length=1, name='process_vectors')(input)
 		layer = Flatten(name='flat')(embed)
-		layer = Dense(1024, name='dense')(layer)
 
 		direc = Dense(y_data.shape[1]-y_sum.shape[1], activation='relu', name='first_directories')(layer)
 		l_sum = Dense(y_sum.shape[1], activation='relu', name='sum_vector')(layer)
@@ -156,13 +142,17 @@ def perform_analysis():
 		outliers = np.argsort(errors)[::-1]
 
 		logging.logger.info('30 Biggest errors')
+		prev = []
 		for process_index in outliers[:50]:
+			if prev == dataset[process_index, :].tolist():
+				continue
+			prev = dataset[process_index, :].tolist()
 			logging.logger.info(str(errors[process_index])[:4] + '\t' + dataset[process_index, 0][:11] + '\t\t' + dataset[process_index, 1][:100])
 
 
 		# Show the model
 		from keras.utils import plot_model
-		plot_model(model, to_file='/shared/model.png', show_shapes=True)
+		plot_model(model, to_file='/shared/model_anormal_cmdlines.png', show_shapes=True)
 
 		# Clustering, for fun :D
 		'''

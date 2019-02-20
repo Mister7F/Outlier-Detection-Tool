@@ -17,7 +17,7 @@ class DenseNetwork:
 		self.model.add(Dense(self.layers[1], activation='relu', input_dim=self.layers[0]))
 
 		for l in self.layers[2:]:
-			self.model.add(Dense(l))
+			self.model.add(Dense(l, activation='relu'))
 
 		self.model.compile('adam', 'mse')
 

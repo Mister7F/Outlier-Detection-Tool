@@ -90,8 +90,11 @@ Running ee-outliers in daemon mode:
 # Build the image
 docker build -t "outliers-dev" .
 
+# Allow docker to spawn windows
+xhost +local:docker
+
 # Run the image
-docker run --network=sensor_network -v "$PWD/defaults:/mappedvolumes/config" -d outliers-dev:latest python3 outliers.py daemon --config /mappedvolumes/config/outliers.conf
+docker run --network="host" -v /tmp/.X11-unix:/tmp/.X11-unix -v "$PWD/shared:/shared" -e DISPLAY -v "$PWD/defaults:/mappedvolumes/config" -i  outliers-dev:latest python3 outliers.py interactive --config /mappedvolumes/config/outliers.conf
 ```
 
 ### Customizing your Docker run parameters
