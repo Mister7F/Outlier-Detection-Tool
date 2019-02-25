@@ -1,4 +1,3 @@
-# Debauche Stéphane
 import numpy as np
 
 from helpers.singletons import settings, es, logging

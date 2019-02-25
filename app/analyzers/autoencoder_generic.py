@@ -1,4 +1,3 @@
-# Debauche Stéphane
 from helpers.singletons import settings, es, logging
 from analyzers.ml_models.dense_network import DenseNetwork
 from helpers.outliers_error_based import OutliersErrorBased
