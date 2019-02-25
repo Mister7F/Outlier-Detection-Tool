@@ -71,7 +71,7 @@ docker build -t "outliers-dev" .
 xhost +local:docker
 
 # Run the image
-docker build -t "outliers-dev" . && docker run --network="host" -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY -v "$PWD/defaults:/mappedvolumes/config" -v "$PWD/shared:/shared" -i  outliers-dev:latest python3 outliers.py interactive --config /mappedvolumes/config/outliers.conf
+docker run --network="host" -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY -v "$PWD/defaults:/mappedvolumes/config" -v "$PWD/shared:/shared" -i  outliers-dev:latest python3 outliers.py interactive --config /mappedvolumes/config/outliers.conf
 ```
 
 ### Running in daemon mode

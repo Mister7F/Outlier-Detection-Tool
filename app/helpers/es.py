@@ -207,7 +207,7 @@ class ES:
         expl: OsqueryFilter.name
         '''
         fields = self.extract_fields_from_document(doc)
-        field = reduce((lambda x, y: x[y]), [fields, *path.split('.')])
+        field = reduce((lambda x, y: x[y][-1] if isinstance(x[y], list) else x[y]), [fields, *path.split('.')])
         return field
 
     def get_fields_by_path(self, doc, paths):
@@ -215,8 +215,8 @@ class ES:
         Return a list of fields from a list of paths
         '''
         fields = self.extract_fields_from_document(doc)
-
-        return [reduce((lambda x, y: x[y]), [fields, *path.split('.')]) for path in paths]
+        # Todo: improve this for array, with item selection
+        return [reduce((lambda x, y: x[y][-1] if isinstance(x[y], list) else x[y]), [fields, *path.split('.')]) for path in paths]
 
     def scan(self, bool_clause=None, sort_clause=None, query_fields=None, lucene_query=None, sort=None):
         # https://elasticsearch-py.readthedocs.io/en/master/helpers.html#scan
@@ -248,8 +248,8 @@ class ES:
         '''
         Params
         ======
-        - aggregator      (str) : Field used to group items
-        - item_identifier (str) : List of fields used to identify an item (a process for example)
+        - aggregator      (str) : Field used to group items (a process name for example)
+        - item_identifier (str) : List of fields used to identify an item (a process pid for example)
         - query_fields          : Send to es.scan
         - lucene_query          : Send to es.scan
         
@@ -271,9 +271,10 @@ class ES:
 
         def _agg_and_item(doc):
             # Return the aggregator value, the item hash and the timestamp of the document
-            fields = self.extract_fields_from_document(doc)            
-            agg, *item_identifier = self.get_fields_by_path(doc, [aggregator] + item_identifiers)                
-            agg = agg[:15]
+            fields = self.extract_fields_from_document(doc)
+            
+            agg, *item_identifier = self.get_fields_by_path(doc, [aggregator] + item_identifiers)
+            
             item_hash = hash(frozenset(item_identifier))
             timestamp = dateutil.parser.parse(fields[timestamp_field])
             return agg, item_hash, timestamp
@@ -314,8 +315,8 @@ class ES:
         # Generator, documents are sorted by: aggregator - item_identifiers - timestamp
         sort = [aggregator + '.keyword', *[i + '.keyword' for i in item_identifiers], timestamp_field]
         aggr_gen.es_scan = self.scan(lucene_query=lucene_query, query_fields=query_fields, sort=sort)
-        
-        # Initialize iteration
+
+        # Initialize iteration, take the first item
         aggr_gen.doc = next(aggr_gen.es_scan)
         aggr_gen.agg, aggr_gen.item_hash, aggr_gen.timestamp = _agg_and_item(aggr_gen.doc)
         aggr_gen.stop = False

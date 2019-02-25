@@ -28,7 +28,7 @@ class Logging:
     def add_stdout_handler(self):
         ch = logging.StreamHandler()
         ch.setLevel(self.logger.level)
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', "%Y-%m-%d %H:%M:%S")
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', "%H:%M:%S")
         ch.setFormatter(formatter)
         self.logger.addHandler(ch)
 
