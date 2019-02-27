@@ -2,6 +2,7 @@ from elasticsearch import helpers as eshelpers, Elasticsearch
 import datetime
 import numpy
 import helpers.utils
+from helpers.utils import DictQuery
 import helpers.logging
 from pygrok import Grok
 
@@ -41,7 +42,14 @@ class ES:
         return self.conn
 
     def count_documents(self, bool_clause=None, query_fields=None, lucene_query=None):
-        res = self.conn.search(index=self.index, body=build_search_query(bool_clause=bool_clause, search_range=self.settings.search_range, query_fields=query_fields, lucene_query=lucene_query), size=self.settings.config.getint("general", "es_scan_size"), scroll=self.settings.config.get("general", "es_scroll_time"))
+        if self.settings.config.getint("general", "ignore_history_window"):
+            self.settings.search_range = None
+        
+        res = self.conn.search(index=self.index,
+                               body=build_search_query(bool_clause=bool_clause, search_range=self.settings.search_range, query_fields=query_fields, lucene_query=lucene_query),
+                               size=self.settings.config.getint("general", "es_scan_size"),
+                               scroll=self.settings.config.get("general", "es_scroll_time"),
+                               terminate_after=self.settings.config.get("general", "es_terminate_after"))
         return res["hits"]["total"]
 
     def sort_by_field_name(self, field_name, ascending=True):
@@ -218,9 +226,25 @@ class ES:
         # Todo: improve this for array, with item selection
         return [reduce((lambda x, y: x[y][-1] if isinstance(x[y], list) else x[y]), [fields, *path.split('.')]) for path in paths]
 
+    def get_type(self, field):
+        mappings = self.conn.indices.get_mapping(index=self.settings.config.get("general", "es_index_pattern"))
+        mappings = mappings[self.settings.config.get("general", "es_index_pattern")]["mappings"]
+        mappings = mappings[next(iter(mappings))] #type
+        mappings = mappings['properties']
+
+        for v in field.split('.'):
+            mappings = mappings[v]
+            if 'properties' in mappings:
+                mappings = mappings['properties']
+        
+        return mappings['type']
+
     def scan(self, bool_clause=None, sort_clause=None, query_fields=None, lucene_query=None, sort=None):
         # https://elasticsearch-py.readthedocs.io/en/master/helpers.html#scan
         preserve_order = True if sort_clause is not None else False
+
+        if self.settings.config.getint("general", "ignore_history_window"):
+            self.settings.search_range = None
 
         query = build_search_query(
                                     bool_clause=bool_clause, 
@@ -231,7 +255,12 @@ class ES:
         
         if sort:
             preserve_order = True
-            query['sort'] = [{v : {"order": "asc"}} for v in sort]
+            query['sort'] = [
+                {v + '.keyword' : {"order": "asc", "unmapped_type": "keyword"}}
+                if self.get_type(v) not in ['long', 'date'] # we don't need keyword to sort these types
+                else {v : {"order": "asc"}}
+                for v in sort
+            ]
 
         return eshelpers.scan(
                                 self.conn, 
@@ -244,14 +273,15 @@ class ES:
                                 terminate_after=self.settings.config.get("general", "es_terminate_after")
                             )
 
-    def time_based_scan(self, aggregator, item_identifiers, query_fields=None, lucene_query=None):
+    def time_based_scan(self, aggregator, fields_value_to_correlate, query_fields=None, lucene_query=None, drop_if_unknow_end=True):
         '''
         Params
         ======
-        - aggregator      (str) : Field used to group items (a process name for example)
-        - item_identifier (str) : List of fields used to identify an item (a process pid for example)
-        - query_fields          : Send to es.scan
-        - lucene_query          : Send to es.scan
+        - aggregator                (str) : Field used to group items (a process name for example)
+        - fields_value_to_correlate (str) : List of fields used to identify an item (a process pid for example)
+        - query_fields                    : Send to es.scan
+        - lucene_query                    : Send to es.scan
+        - drop_if_unknow_end       (bool) : What should I do if I can't find the end ? drop - zero_duration
         
         Usage
         =====
@@ -265,7 +295,7 @@ class ES:
 
         # Add fields needed... (aggregator, item_identifier and timestamp)
         if query_fields is not None: 
-            for i in [timestamp_field, aggregator, *item_identifiers]:
+            for i in [timestamp_field, aggregator, *fields_value_to_correlate]:
                 if i not in query_fields:
                     query_fields.append(i)
 
@@ -273,29 +303,39 @@ class ES:
             # Return the aggregator value, the item hash and the timestamp of the document
             fields = self.extract_fields_from_document(doc)
             
-            agg, *item_identifier = self.get_fields_by_path(doc, [aggregator] + item_identifiers)
+            agg, *item_identifier = self.get_fields_by_path(doc, [aggregator] + fields_value_to_correlate)
             
             item_hash = hash(frozenset(item_identifier))
-            timestamp = dateutil.parser.parse(fields[timestamp_field])
+            
+            if type(fields[timestamp_field]) is int:
+                timestamp = datetime.datetime.fromtimestamp(fields[timestamp_field])
+            else:
+                timestamp = dateutil.parser.parse(fields[timestamp_field])
+
             return agg, item_hash, timestamp
 
         def aggr_gen():
             # Generator over documents inside the aggregation
             prev_document = aggr_gen.doc
             prev_timestamp = aggr_gen.timestamp
+            end_found = False
 
             for doc in aggr_gen.es_scan:
                 agg, item_hash, timestamp = _agg_and_item(doc)
 
                 # New item
-                if item_hash != aggr_gen.item_hash:
-                    # yield the previous item
-                    duration = (prev_timestamp - aggr_gen.timestamp).total_seconds()
-                    yield aggr_gen.doc, aggr_gen.timestamp, duration
+                if item_hash != aggr_gen.item_hash:       
+                    # yield the previous item             
+                    if end_found or (not end_found and not drop_if_unknow_end):
+                        duration = (prev_timestamp - aggr_gen.timestamp).total_seconds()
+                        yield aggr_gen.doc, aggr_gen.timestamp, duration
                     # initialise information about the new one
                     aggr_gen.item_hash = item_hash
                     aggr_gen.timestamp = timestamp
                     aggr_gen.doc = doc
+                    end_found = False
+                else:
+                    end_found = True
                 
                 # New aggregation
                 if agg != aggr_gen.agg:
@@ -312,8 +352,9 @@ class ES:
             # Stop the main loop
             aggr_gen.stop = True
 
-        # Generator, documents are sorted by: aggregator - item_identifiers - timestamp
-        sort = [aggregator + '.keyword', *[i + '.keyword' for i in item_identifiers], timestamp_field]
+
+        # Generator, documents are sorted by: aggregator - fields_value_to_correlate - timestamp
+        sort = [aggregator, *[i for i in fields_value_to_correlate], timestamp_field]
         aggr_gen.es_scan = self.scan(lucene_query=lucene_query, query_fields=query_fields, sort=sort)
 
         # Initialize iteration, take the first item
