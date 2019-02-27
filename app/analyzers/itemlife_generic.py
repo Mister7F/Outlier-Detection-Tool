@@ -22,7 +22,13 @@ def perform_analysis():
 
 		model_settings = extract_model_settings(section_name)
 
-		across_aggregator_target = ['number_of_events', 'max_duration', 'min_duration', 'mean_duration', 'events_per_minute']
+		across_aggregator_target = [
+			'number_of_events',
+			'max_duration',
+			'min_duration',
+			'mean_duration',
+			'events_per_minute'
+		]
 		
 		if model_settings['target'] in across_aggregator_target:
 			perform_analysis_across_aggregators(model_settings)
@@ -293,4 +299,3 @@ def process_outlier(doc, model_settings, target):
     es.process_outliers(doc=doc, outliers=[outlier], should_notify=model_settings["should_notify"])
 
     return outlier
-
