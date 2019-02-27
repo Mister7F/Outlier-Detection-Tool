@@ -22,7 +22,7 @@ def perform_analysis():
 
 		model_settings = extract_model_settings(section_name)
 
-		across_aggregator_target = ['number_of_events', 'max_duration', 'min_duration', 'mean_duration']
+		across_aggregator_target = ['number_of_events', 'max_duration', 'min_duration', 'mean_duration', 'events_per_minute']
 		
 		if model_settings['target'] in across_aggregator_target:
 			perform_analysis_across_aggregators(model_settings)
@@ -38,40 +38,50 @@ def perform_analysis_across_aggregators(model_settings):
 	logging.logger.info('Total documents: %i' % total_documents)
 
 	aggregations = []
-	aggregations_docs = {}
-	aggregations_starts = {}
-	aggregations_durations = {}
+	aggregations_docs = []
+
+	# Field analyzed across aggregators
+	aggregations_target = []
 
 	for aggregation, documents in es.time_based_scan(model_settings["aggregator"], model_settings["fields_value_to_correlate"], query_fields=[], lucene_query=lucene_query):
 		aggregations.append(aggregation)
-		aggregations_docs[aggregation] = []
-		aggregations_starts[aggregation] = []
-		aggregations_durations[aggregation] = []
 
-		for doc, start, duration in documents:	
-			aggregations_docs[aggregation].append(doc)			
-			aggregations_starts[aggregation].append(start)
-			aggregations_durations[aggregation].append(duration)
+		agg_starts = []
+		agg_durations = []
 
-	aggregations_target = []
+		for doc, start, duration in documents:
+			# Keep only the first document for each aggregator
+			if len(aggregations_docs) < len(aggregations):
+				aggregations_docs.append(doc)
 
-	# Get method
-	if model_settings['target'] == 'number_of_events':
-		for agg in aggregations:
-			aggregations_target.append(len(aggregations_docs[agg]))
+			agg_starts.append(start)
+			agg_durations.append(duration)
 
-	elif model_settings['target'] == 'max_duration':
-		for agg in aggregations:
-			aggregations_target.append(max(aggregations_durations[agg]))
+		if not len(agg_starts):
+			continue
+	
+		# Get method
+		if model_settings['target'] == 'number_of_events':
+			aggregations_target.append(len(agg_starts))
 
-	elif model_settings['target'] == 'min_duration':
-		for agg in aggregations:
-			aggregations_target.append(min(aggregations_durations[agg]))
+		elif model_settings['target'] == 'max_duration':
+			aggregations_target.append(max(agg_durations))
 
-	elif model_settings['target'] == 'mean_duration':
-		for agg in aggregations:
-			aggregations_durations[agg] = np.array(aggregations_durations[agg])
-			aggregations_target.append(aggregations_durations[agg].mean())
+		elif model_settings['target'] == 'min_duration':
+			aggregations_target.append(min(agg_durations))
+
+		elif model_settings['target'] == 'mean_duration':
+			aggregations_target.append(np.array(agg_durations).mean())
+
+		elif model_settings['target'] == 'events_per_minute':
+			start_agg = min(agg_starts)
+			end_agg = max(agg_starts)
+			aggregator_time_range = ((end_agg-start_agg).total_seconds()/60) + 1
+			n_events = len(agg_starts) - 1
+			aggregations_target.append(n_events/aggregator_time_range)
+
+			logging.logger.info('Aggregation %s has %i events in %s minutes' % (str(aggregation), len(agg_starts), aggregator_time_range))
+
 
 	aggregations_target = np.array(aggregations_target)
 
@@ -88,7 +98,7 @@ def perform_analysis_across_aggregators(model_settings):
 		agg = aggregations[outlier]
 		# Process only the first doc of the aggregation,
 		# this document represent the aggregation...
-		process_outlier(aggregations_docs[agg][0], model_settings, aggregations_target[outlier])
+		process_outlier(aggregations_docs[outlier], model_settings, aggregations_target[outlier])
 
 
 def perform_analysis_with_in_aggregator(model_settings):
