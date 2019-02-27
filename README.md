@@ -117,7 +117,11 @@ The different types of detection models that can be configured are listed below.
 - **terms models**:  the terms model looks for outliers by calculting rare combinations of a certain field(s) in combination with other field(s). Example use case: tag all events that represent Windows network processes that are rarely observed across all reporting endpoints in order to detect C2 phone home activity.
 
 - **word2vec models (BETA)**: the word2vec model is the first Machine Learning model defined in ee-outliers. It allows the analyst to train a model based on a set of features that are expected to appear in the same context. After initial training, the model is then able to spot anomalies in unexected combinations of the trained features. Example use case: train a model to learn which usernames, workstations and user roles are expected to appear together in order to alert on breached Windows accounts that are used to laterally move in the network.
-- **itemlife models**: This model will measure the start time, the duration and the end time of an "element", and then apply MAD, STDEV, LOF on it (start hour, start month, start timestamp, duration, end hour, end month). You can also apply outlier detection across aggregators (number of events per aggregation). With this, you can for example detect long users sessions, long running processes...
+- **autoencoder**: this model used the reconstruction score of the autoencoder to detect outliers. Outliers will have a bigger reconstruction error ! (works only for numeric fields).
+- **decision tree**: this model is not useful to detect outlier, but can be used to know which feature is the most linked to another one.
+- **sentence prediction**: this model use neural network to detect abnormal sentences. The sentences will be split into words, and words will be one hot encoded. Then the NN will be trained to predict the sentence from the label. We use the prediction error to detect abnormal sentences.
+- **string K-Means**: this model will one hot encode words, and then apply K-Means on these vectors.
+- **itemlife models**: the itemlife model will measure the start time, the duration and the end time of an "element", and then apply MAD, STDEV, LOF on it (start hour, start month, start timestamp, duration, end hour, end month). You can also apply outlier detection across aggregators (number of events per aggregation). With this, you can, for example, detect long users sessions, long running processes...
 
 
 ### General model parameters
