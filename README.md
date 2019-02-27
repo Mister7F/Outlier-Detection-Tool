@@ -34,7 +34,7 @@ The possibilities of the type of anomalies you can spot using ee-outliers is vir
 -	Detect processes with suspicious outbound connectivity
 -	Detect malicious persistence mechanisms (scheduled tasks, auto-runs, etc.)
 -	…
-https://github.com/Mister7F/ee-outliers
+
 Checkout the screenshots at the end of this readme for a few examples.
 Continue reading if you would like to get started with outlier detection in Elasticsearch yourself!
 
