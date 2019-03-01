@@ -3,9 +3,10 @@ from sklearn.neighbors import LocalOutlierFactor
 
 
 class UnivariateOutlier():
-	def __init__(self, method='stdev', trigger_sensitity=3):
+	def __init__(self, method='stdev', trigger_sensitity=3, n_neighbors=20):
 		self.method = method
 		self.trigger_sensitity = trigger_sensitity
+		self.n_neighbors = n_neighbors
 
 	def detect_outliers(self, data):
 		'''
@@ -29,8 +30,7 @@ class UnivariateOutlier():
 		elif self.method == 'lof_stdev':
 			return self._lof_stdev(data)
 
-		# Todo: exc type
-		raise 'Wrong method'
+		raise ValueError('Wrong method', 'mad', 'stdev', 'lof', 'lof_stdev')
 
 	def _mad(self, data):
 		mad = np.median(abs(data-np.median(data)))
@@ -51,7 +51,10 @@ class UnivariateOutlier():
 
 		if data.ndim == 1:
 			data = data.reshape(-1, 1)
-		clf = LocalOutlierFactor(novelty=True, contamination=self.trigger_sensitity/100, n_neighbors=min(data.shape[0]//10, 20))
+		clf = LocalOutlierFactor(
+			novelty=True, contamination=self.trigger_sensitity/100,
+			n_neighbors=self.n_neighbors
+		)
 		clf.fit(data)
 
 		predictions = clf.predict(data)
@@ -59,9 +62,6 @@ class UnivariateOutlier():
 		return np.arange(data.shape[0])[predictions < 0]
 
 	def _lof_stdev(self, data):
-
-		np.savetxt('/shared/session', data)
-
 		if data.shape[0] < 10:
 			# Not enough data to find outliers...
 			return []
@@ -69,11 +69,12 @@ class UnivariateOutlier():
 		if data.ndim == 1:
 			data = data.reshape(-1, 1)
 
-		clf = LocalOutlierFactor(contamination=0.1, n_neighbors=100)
-		clf.fit_predict(data)
-		lofs = clf.negative_outlier_factor_ * (-1)
-
-		# IQR on LOF
-		iqr = np.percentile(lofs, 75) * self.trigger_sensitity
-
-		return np.arange(lofs.size)[lofs > iqr]
+		clf = LocalOutlierFactor(
+			novelty=True,
+			contamination=0.1,
+			n_neighbors=self.n_neighbors
+		)
+		clf.fit(data)
+		lofs = clf.score_samples(data)
+		
+		return self._stdev(lofs)

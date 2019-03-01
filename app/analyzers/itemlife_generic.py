@@ -7,13 +7,11 @@ import gc
 import helpers
 from helpers.outlier import Outlier
 from helpers.singletons import settings, es, logging
-from helpers.outliers_error_based import OutliersErrorBased
 from helpers.text_processing import class_to_id
 from analyzers.algorithms.univariate_outliers import UnivariateOutlier
 
 
-def perform_analysis():	
-
+def perform_analysis():
 	for section_name in settings.config.sections():
 		if not section_name.startswith('itemlife_'):
 			continue
@@ -36,8 +34,7 @@ def perform_analysis():
 			perform_analysis_with_in_aggregator(model_settings)
 
 		
-def perform_analysis_across_aggregators(model_settings):
-	
+def perform_analysis_across_aggregators(model_settings):	
 	lucene_query = es.filter_by_query_string(model_settings["es_query_filter"])
 
 	total_documents = es.count_documents(lucene_query=lucene_query)
@@ -49,7 +46,12 @@ def perform_analysis_across_aggregators(model_settings):
 	# Field analyzed across aggregators
 	aggregations_target = []
 
-	for aggregation, documents in es.time_based_scan(model_settings["aggregator"], model_settings["fields_value_to_correlate"], query_fields=[], lucene_query=lucene_query):
+	for aggregation, documents in es.time_based_scan(
+			model_settings["aggregator"],
+			model_settings["fields_value_to_correlate"],
+			query_fields=[],
+			lucene_query=lucene_query
+		):
 		aggregations.append(aggregation)
 
 		agg_starts = []
@@ -86,19 +88,27 @@ def perform_analysis_across_aggregators(model_settings):
 			n_events = len(agg_starts) - 1
 			aggregations_target.append(n_events/aggregator_time_range)
 
-			logging.logger.info('Aggregation %s has %i events in %s minutes' % (str(aggregation), len(agg_starts), aggregator_time_range))
-
+			logging.logger.info(
+				'Aggregation %s has %i events in %s minutes' 
+				% (str(aggregation), len(agg_starts), aggregator_time_range)
+			)
 
 	aggregations_target = np.array(aggregations_target)
 
 	# Outliers detection
 	outliers = UnivariateOutlier(
 		model_settings["trigger_method"],
-		model_settings["trigger_sensitivity"]
+		model_settings["trigger_sensitivity"],
+		model_settings["n_neighbors"]
 	).detect_outliers(aggregations_target)
 
 	tmp = np.ones(aggregations_target.shape); tmp[outliers] = 0
-	histogram_outliers(aggregations_target[tmp==1], aggregations_target[tmp==0], xlabel=model_settings["target"], bins=48)
+	histogram_outliers(
+		aggregations_target[tmp==1],
+		aggregations_target[tmp==0],
+		xlabel=model_settings["target"],
+		bins=48
+	)
 
 	for outlier in outliers:
 		agg = aggregations[outlier]
@@ -134,7 +144,7 @@ def perform_analysis_with_in_aggregator(model_settings):
 			batch_starts = []
 			batch_durations = []
 
-			for i, (doc, start, duration) in enumerate(documents):	
+			for i, (doc, start, duration) in enumerate(documents):
 				batch_docs.append(doc)	
 				batch_starts.append(start)
 				batch_durations.append(duration)
@@ -146,11 +156,12 @@ def perform_analysis_with_in_aggregator(model_settings):
 				read_next_batch = False
 
 			batch_targets = get_time_targets(batch_starts, batch_durations, model_settings["target"])
-			
+
 			# Outliers detection
 			agg_outliers = UnivariateOutlier(
 				model_settings["trigger_method"],
-				model_settings["trigger_sensitivity"]
+				model_settings["trigger_sensitivity"],
+				model_settings["n_neighbors"]
 			).detect_outliers(np.array(batch_targets))
 
 			for index in agg_outliers:
@@ -166,10 +177,11 @@ def perform_analysis_with_in_aggregator(model_settings):
 			del batch_targets
 			# Garbage collector
 			gc.collect()
+
+
 	
 	logging.logger.info('Number of aggregations: %i\t:\t' % len(aggregations))
 	logging.logger.info('Number of elements: %i' % sum([len(all_targets[t]) for t in all_targets]))
-
 
 	# Plot the histogram
 	n_cols = min(3, len(all_targets))
@@ -192,15 +204,13 @@ def perform_analysis_with_in_aggregator(model_settings):
 		p_data = np.delete(data, out)
 		p_out = data[out]
 		if not p_out.size:
-			plt.hist(p_data, bins=50, label=['Data'], color=['darkblue'], stacked=True)
+			plt.hist(p_data, label=['Data'], color=['darkblue'], stacked=True)
 		else:
-			plt.hist([p_out, p_data], bins=50, label=['Outliers', 'Data'], color=['r', 'darkblue'], stacked=True)
+			plt.hist([p_out, p_data], label=['Outliers', 'Data'], color=['r', 'darkblue'], stacked=True)
 
 		plt.title(model_settings["aggregator"] + ': ' + str(aggregation) + ' - ' + xlabel + ' - Histogram')
 		plt.xlabel(xlabel)
-		plt.ylabel('Count [log]')
-		plt.yscale('log')
-		plt.ylim(bottom=0.5)
+		plt.ylabel('Count')
 		plt.legend()
 
 	plt.show()
@@ -210,7 +220,7 @@ def get_time_targets(starts, durations, target):
 	allowed = [
 		'start_timestamp', 'start_year', 'start_month', 'start_day', 'start_hour', 'start_minute', 
 		'end_timestamp', 'end_year', 'end_month', 'end_day', 'end_hour', 'end_minute',
-		'duration'
+		'duration', 'log_duration'
 	]
 
 	if target not in allowed:
@@ -244,18 +254,20 @@ def get_time_targets(starts, durations, target):
 	elif target == 'duration':
 		return durations
 
+	elif target == 'log_duration':
+		return np.log10(np.array(durations)+1)
+
 	raise 'Wrong time target'
 
 
-def histogram_outliers(data, outliers=[], xlabel='Value', bins=200):
+def histogram_outliers(data, outliers=[], xlabel='Value', bins=10):
     xlabel = ' '.join(xlabel.split('_'))
     xlabel = xlabel[0].upper() + xlabel[1:]
 
     plt.hist([outliers, data], bins=bins, label=['Outliers', 'Data'], color=['r', 'darkblue'], stacked=True)
     plt.title(xlabel + ' - Histogram')
     plt.xlabel(xlabel)
-    plt.ylabel('Count [log]')
-    plt.yscale('log')
+    plt.ylabel('Count')
     plt.ylim(bottom=0.5)
     plt.legend()
     plt.show()
@@ -276,6 +288,14 @@ def extract_model_settings(section_name):
 	model_settings["trigger_method"] = settings.config.get(section_name, "trigger_method")
 	model_settings["trigger_sensitivity"] = settings.config.getfloat(section_name, "trigger_sensitivity")
 	model_settings["batch_eval_size"] = settings.config.getint(section_name, "batch_eval_size")
+
+	try:
+		model_settings["n_neighbors"] = settings.config.getint(section_name, "n_neighbors")
+	except:
+		if model_settings["trigger_method"] in ['lof, lof_stdev']:
+			raise Exception('n_neighbors is missing')
+		
+		model_settings["n_neighbors"] = 0
 
 	if model_settings["trigger_method"] not in ['mad', 'stdev', 'lof', 'lof_stdev']:
 		raise 'Wrong trigger_method'

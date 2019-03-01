@@ -26,7 +26,6 @@ from analyzers import decision_tree_generic
 from analyzers import itemlife_generic
 
 
-
 ##############
 # Entrypoint #
 ##############
@@ -48,8 +47,7 @@ logging.logger.info("run mode: " + settings.args.run_mode)
 logging.print_generic_intro("initializing")
 
 
-def perform_analysis():
-    '''
+def perform_analysis():    
     test_generic.perform_analysis()
     beaconing_generic.perform_analysis()
     metrics_generic.perform_analysis()
@@ -57,12 +55,11 @@ def perform_analysis():
     terms_generic.perform_analysis()
     svm_generic.perform_analysis()
     word2vec_generic.perform_analysis()
-    
+
     clustering_str_k_mean_generic.perform_analysis()
     autoencoder_generic.perform_analysis()
     decision_tree_generic.perform_analysis()
     sentence_prediction_generic.perform_analysis()
-    '''
     itemlife_generic.perform_analysis()
 
 

@@ -3,9 +3,9 @@ from functools import reduce
 import re
 
 from helpers.singletons import settings, es, logging
-from helpers.outliers_error_based import OutliersErrorBased
 from helpers.text_processing import class_to_id, Tokenizer
 from analyzers.ml_models.dense_network import DenseNetwork
+from analyzers.algorithms.outliers_error_based import OutliersErrorBased
 
 import keras
 from keras import Model
@@ -50,7 +50,8 @@ def perform_analysis():
 
 		dataset = np.array([
 			es.get_fields_by_path(doc, fields)
-			for doc in es.scan(lucene_query=lucene_query, query_fields=fields)
+			for i, doc in enumerate(es.scan(lucene_query=lucene_query, query_fields=fields))
+			if i < settings.config.getint("general", "es_terminate_after")
 		]).astype('object')
 
 		# Change each process by an id
@@ -80,9 +81,9 @@ def perform_analysis():
 
 		# Tokenize sentences, split in words and replace each words by an id
 		tokenizer = Tokenizer(
-								split=model_settings["tokenizer_split_path"],
-								vocab_size=model_settings["tokenizer_max_dic_size"]
-							 )
+			split=model_settings["tokenizer_split_path"],
+			vocab_size=model_settings["tokenizer_max_dic_size"]
+		)
 
 		tokenizer.train_on_data(dataset[:, 1])
 
@@ -149,28 +150,6 @@ def perform_analysis():
 			prev = dataset[process_index, :].tolist()
 			logging.logger.info(str(errors[process_index])[:4] + '\t' + dataset[process_index, 0][:11] + '\t\t' + dataset[process_index, 1][:100])
 
-
 		# Show the model
 		from keras.utils import plot_model
 		plot_model(model, to_file='/shared/model_anormal_cmdlines.png', show_shapes=True)
-
-		# Clustering, for fun :D
-		'''
-		rev_process_dic = {process_dic[i]:i for i in process_dic}
-		logging.logger.info('Let\'s clusterise process using their vectors')
-		from analyzers.algorithms.k_means import k_means
-		process_vectors = model.get_layer(name='process_vectors').get_weights()[0]
-
-		logging.logger.info(str(process_vectors.shape))
-
-		clusters = k_means(process_vectors, 5)
-
-		for i, cluster in enumerate(clusters):
-			logging.logger.info('_' * 50)
-			logging.logger.info('# Cluster %i'%i)
-			
-			for c in cluster:
-				h = process_vectors[c, :].sum() + process_vectors[c, :].std()
-				logging.logger.info('vect hash=' + str(h)[:5] + '\tindex=' + str(c) + '\t[' + rev_process_dic[c] + ']')
-			logging.logger.info('_' * 50)
-		'''

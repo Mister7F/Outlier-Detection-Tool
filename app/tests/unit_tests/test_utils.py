@@ -140,3 +140,5 @@ class TestUtils(unittest.TestCase):
         res = helpers.utils.get_decision_frontier("mad", [1, 1, 2, 2, 4, 6, 9], 2, "high")  # MAD should be 4
         sensitivity = 2
         self.assertEqual(median + sensitivity * mad, res)  # 2 = sensitivity, 1 = MAD, median = 2
+
+    

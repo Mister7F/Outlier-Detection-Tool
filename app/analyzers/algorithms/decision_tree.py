@@ -1,11 +1,6 @@
 import math
 import numpy as np
 
-'''
-Decision tree description
-Initial code
-> https://colab.research.google.com/drive/1DDL4bomVrj29bX92TzsQi_GJ_NyN58D2
-'''
 
 class Tree:
     def __init__(self, data, feature_type, max_depth=3, depth=0):
@@ -30,7 +25,7 @@ class Tree:
         
         self.build_tree()        
         
-        if depth < max_depth and self.group_1.size and self.group_2.size:
+        if depth < max_depth and self.group_1.size and self.group_2.size and np.unique(data[:, -1]).size > 1:
             child_1 = Tree(self.group_1, feature_type, max_depth, depth+1)
             child_2 = Tree(self.group_2, feature_type, max_depth, depth+1)
             
@@ -38,10 +33,10 @@ class Tree:
     
     def _check_parameter(self):
         if len(self.feature_type) != self.dataset.shape[1]:
-            raise "Error, feature_type does'nt have the same size as data"
+            raise Exception("Error, feature_type does'nt have the same size as data")
         
         if self.feature_type[-1] != 'enum':
-            raise "Error, last feature (label) needs the 'enum' type'"
+            raise Exception("Error, last feature (label) needs the 'enum' type'")
 
         for i, f in enumerate(self.feature_type):
             if f == 'enum':
@@ -49,7 +44,7 @@ class Tree:
             try:
                 self.dataset[:, i].mean()
             except:
-                raise 'Float type needed'
+                raise Exception('Float type needed')
     
     def impurity(self, debug=False):
         values_1, count_1 = np.unique(self.group_1[:, -1], return_counts=True)
@@ -104,8 +99,8 @@ class Tree:
                 min = self.dataset[:, col].min()
                 max = self.dataset[:, col].max()
 
-                for j in range(1000):
-                    v = (max - min) * (j/1000) + min
+                for j in range(100):
+                    v = (max - min) * (j/100) + min
                     self.rule_val = v
                     
                     self.split_data()

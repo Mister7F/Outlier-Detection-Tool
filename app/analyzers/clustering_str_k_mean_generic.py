@@ -2,10 +2,10 @@ import numpy as np
 from functools import reduce
 
 from helpers.singletons import settings, es, logging
-from helpers.outliers_error_based import OutliersErrorBased
 from helpers.text_processing import onthot_encode
 
 from analyzers.algorithms.k_means import k_means
+from analyzers.algorithms.outliers_error_based import OutliersErrorBased
 
 
 def extract_model_settings(section_name):
@@ -33,17 +33,11 @@ def perform_analysis():
 
 		logging.logger.info('Total events %i'%total_events)
 
-		dataset = np.ndarray((total_events, len(model_settings["features"]))).astype(str)
-
 		# Convert data to a 2d array of strings (lines: items, cols: features)
-		for i, doc in enumerate(es.scan(
-									lucene_query=lucene_query,
-									query_fields=model_settings["features"]
-								  )):
-			doc_fields = es.extract_fields_from_document(doc)
-
-			for j, field in enumerate(model_settings["features"]):
-				dataset[i, j] = reduce((lambda x, y: x[y]), [doc_fields, *field.split('.')])
+		dataset = np.array([
+			es.get_fields_by_path(doc, model_settings["features"])
+			for doc in es.scan(lucene_query=lucene_query, query_fields=model_settings["features"])
+		])
 
 		# Onthot encode strings [features][item, dim]
 		matrix = [onthot_encode(dataset[:, f]) for f in range(dataset.shape[1])]

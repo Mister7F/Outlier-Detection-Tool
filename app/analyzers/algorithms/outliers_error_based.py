@@ -7,7 +7,7 @@ from helpers.singletons import logging
 class OutliersErrorBased:
 	'''
 	Used to detect outliers
-	If we make a bad prediction, it might be an anomaly.
+	Use the prediction error as a score for anomaly detection
 	'''
 	def __init__(self, errors, labels_title=[], labels=[], is_anormal=None):
 		'''
@@ -25,7 +25,7 @@ class OutliersErrorBased:
 
 	def _check_debugging(self):
 		if self.is_anormal is None:
-			raise 'I need to know which item is anormal to measure performance... :/'
+			raise Exception('I need to know which item is anormal to measure performance... :/')
 
 	def measure_performance(self, threshold):
 		self._check_debugging()

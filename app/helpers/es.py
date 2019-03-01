@@ -13,6 +13,7 @@ from itertools import chain
 from functools import reduce
 import dateutil.parser
 
+
 @singleton
 class ES:
     index = None
@@ -32,24 +33,42 @@ class ES:
             self.notifier = Notifier(settings, logging)
 
     def init_connection(self):
-        self.conn = Elasticsearch([self.settings.config.get("general", "es_url")], use_ssl=False, timeout=self.settings.config.getint("general", "es_timeout"), verify_certs=False, retry_on_timeout=True)
+        self.conn = Elasticsearch(
+            [self.settings.config.get("general", "es_url")],
+            use_ssl=False,
+            timeout=self.settings.config.getint("general", "es_timeout"),
+            verify_certs=False,
+            retry_on_timeout=True
+        )
 
         if self.conn.ping():
-            self.logging.logger.info("connected to Elasticsearch on host %s" % (self.settings.config.get("general", "es_url")))
+            self.logging.logger.info(
+                "connected to Elasticsearch on host %s"
+                % (self.settings.config.get("general", "es_url"))
+            )
         else:
-            self.logging.logger.error("could not connect to to host %s. Exiting!" % (self.settings.config.get("general", "es_url")))
+            self.logging.logger.error(
+                "could not connect to to host %s. Exiting!"
+                % (self.settings.config.get("general", "es_url"))
+            )
 
         return self.conn
 
     def count_documents(self, bool_clause=None, query_fields=None, lucene_query=None):
         if self.settings.config.getint("general", "ignore_history_window"):
             self.settings.search_range = None
-        
-        res = self.conn.search(index=self.index,
-                               body=build_search_query(bool_clause=bool_clause, search_range=self.settings.search_range, query_fields=query_fields, lucene_query=lucene_query),
-                               size=self.settings.config.getint("general", "es_scan_size"),
-                               scroll=self.settings.config.get("general", "es_scroll_time"),
-                               terminate_after=self.settings.config.get("general", "es_terminate_after"))
+   
+        res = self.conn.search(
+            index=self.index,
+            body=build_search_query(
+                bool_clause=bool_clause,
+                search_range=self.settings.search_range,
+                query_fields=query_fields,
+                lucene_query=lucene_query),
+            size=self.settings.config.getint("general", "es_scan_size"),
+            scroll=self.settings.config.get("general", "es_scroll_time"),
+            terminate_after=self.settings.config.get("general", "es_terminate_after")
+        )
         return res["hits"]["total"]
 
     def sort_by_field_name(self, field_name, ascending=True):
@@ -86,9 +105,12 @@ class ES:
 
         return bool_clause
 
-    # this is part of housekeeping, so we should not access non-threat-save objects, such as logging progress to the console using ticks!
+    # this is part of housekeeping, so we should not access non-threat-save objects, 
+    # such as logging progress to the console using ticks!
     def remove_all_whitelisted_outliers(self):
-        from helpers.outlier import Outlier  # import goes here to avoid issues with singletons & circular requirements ... //TODO: fix this
+        # import goes here to avoid issues with singletons & circular requirements ... 
+        # //TODO: fix this
+        from helpers.outlier import Outlier
 
         must_clause = {"must": [{"match": {"tags": "outlier"}}]}
         total_docs_whitelisted = 0
@@ -104,20 +126,30 @@ class ES:
                 outlier_reason = doc["_source"]["outliers"]["reason"][i]
                 outlier_summary = doc["_source"]["outliers"]["summary"][i]
 
-                outlier = Outlier(type=outlier_type, reason=outlier_reason, summary=outlier_summary)
+                outlier = Outlier(
+                    type=outlier_type,
+                    reason=outlier_reason,
+                    summary=outlier_summary
+                )
                 if outlier.is_whitelisted(additional_dict_values_to_check=doc):
                     total_whitelisted += 1
 
-            # if all outliers for this document are whitelisted, removed them all. If not, don't touch the document.
-            # this is a limitation in the way our outliers are stored: if not ALL of them are whitelisted, we can't remove just the whitelisted ones
-            # from the Elasticsearch event, as they are stored as array elements and potentially contain observations that should be removed, too.
+            # if all outliers for this document are whitelisted, removed them all.
+            # If not, don't touch the document.
+            # this is a limitation in the way our outliers are stored: 
+            # if not ALL of them are whitelisted, we can't remove just the whitelisted ones
+            # from the Elasticsearch event, as they are stored as array elements and 
+            # potentially contain observations that should be removed, too.
             # In this case, just don't touch the document.
             if total_whitelisted == total_outliers:
                 total_docs_whitelisted += 1
                 doc = remove_outliers_from_document(doc)
 
-                self.conn.delete(index=doc["_index"], doc_type=doc["_type"], id=doc["_id"], refresh=True)
-                self.conn.create(index=doc["_index"], doc_type=doc["_type"], id=doc["_id"], body=doc["_source"], refresh=True)
+                self.conn.delete(index=doc["_index"], doc_type=doc["_type"],
+                                 id=doc["_id"], refresh=True)
+
+                self.conn.create(index=doc["_index"], doc_type=doc["_type"],
+                                 id=doc["_id"], body=doc["_source"], refresh=True)
 
         return total_docs_whitelisted
 
@@ -130,8 +162,10 @@ class ES:
             self.logging.tick()
             doc = remove_outliers_from_document(doc)
 
-            self.conn.delete(index=doc["_index"], doc_type=doc["_type"], id=doc["_id"], refresh=True)
-            self.conn.create(index=doc["_index"], doc_type=doc["_type"], id=doc["_id"], body=doc["_source"], refresh=True)
+            self.conn.delete(index=doc["_index"], doc_type=doc["_type"],
+                             id=doc["_id"], refresh=True)
+            self.conn.create(index=doc["_index"], doc_type=doc["_type"],
+                             id=doc["_id"], body=doc["_source"], refresh=True)
 
         if total_outliers > 0:
             self.logging.logger.info("wiped outlier information of " + str(total_outliers) + " documents")
@@ -166,7 +200,13 @@ class ES:
         else:
             doc_body = dict(doc={"outliers": doc["_source"]["outliers"]})
 
-        self.conn.update(index=doc["_index"], doc_type=doc["_type"], id=doc["_id"], body=doc_body, refresh=True)
+        self.conn.update(
+            index=doc["_index"],
+            doc_type=doc["_type"],
+            id=doc["_id"],
+            body=doc_body,
+            refresh=True
+        )
 
     def extract_derived_fields(self, doc_fields):
         derived_fields = dict()
@@ -215,7 +255,10 @@ class ES:
         expl: OsqueryFilter.name
         '''
         fields = self.extract_fields_from_document(doc)
-        field = reduce((lambda x, y: x[y][-1] if isinstance(x[y], list) else x[y]), [fields, *path.split('.')])
+        field = reduce(
+            (lambda x, y: x[y][-1] if isinstance(x[y], list) else x[y]), 
+            [fields, *path.split('.')]
+        )
         return field
 
     def get_fields_by_path(self, doc, paths):
@@ -223,66 +266,94 @@ class ES:
         Return a list of fields from a list of paths
         '''
         fields = self.extract_fields_from_document(doc)
-        # Todo: improve this for array, with item selection
-        return [reduce((lambda x, y: x[y][-1] if isinstance(x[y], list) else x[y]), [fields, *path.split('.')]) for path in paths]
+        ret = []
+        for path in paths:
+            f = fields
+            for s in path.split('.'):
+                f = f[s]
+                # Todo: improve this for array, with item selection
+                if isinstance(f, list):
+                    f = f[-1]
+            ret.append(f)
+
+        return ret
 
     def get_type(self, field):
-        mappings = self.conn.indices.get_mapping(index=self.settings.config.get("general", "es_index_pattern"))
+        '''
+        Params
+        - field (str) : Field we want to get the type
+                        (OsqueryFilter.name for example)
+        '''
+        mappings = self.conn.indices.get_mapping(
+                        index=self.settings.config.get("general", "es_index_pattern"))
+        
         mappings = mappings[self.settings.config.get("general", "es_index_pattern")]["mappings"]
-        mappings = mappings[next(iter(mappings))] #type
+        mappings = mappings[next(iter(mappings))]  # type
         mappings = mappings['properties']
 
         for v in field.split('.'):
             mappings = mappings[v]
             if 'properties' in mappings:
                 mappings = mappings['properties']
-        
+
         return mappings['type']
 
-    def scan(self, bool_clause=None, sort_clause=None, query_fields=None, lucene_query=None, sort=None):
-        # https://elasticsearch-py.readthedocs.io/en/master/helpers.html#scan
+    def scan(
+        self, bool_clause=None, sort_clause=None,
+        query_fields=None, lucene_query=None, sort=None
+    ):
         preserve_order = True if sort_clause is not None else False
 
         if self.settings.config.getint("general", "ignore_history_window"):
             self.settings.search_range = None
 
         query = build_search_query(
-                                    bool_clause=bool_clause, 
-                                    sort_clause=sort_clause, 
-                                    search_range=self.settings.search_range, 
-                                    query_fields=query_fields, 
-                                    lucene_query=lucene_query)
-        
+            bool_clause=bool_clause,
+            sort_clause=sort_clause,
+            search_range=self.settings.search_range,
+            query_fields=query_fields,
+            lucene_query=lucene_query
+        )
+
         if sort:
             preserve_order = True
             query['sort'] = [
-                {v + '.keyword' : {"order": "asc", "unmapped_type": "keyword"}}
-                if self.get_type(v) not in ['long', 'date'] # we don't need keyword to sort these types
-                else {v : {"order": "asc"}}
+                {v + '.keyword': {"order": "asc", "unmapped_type": "keyword"}}
+                # we don't need keyword to sort these types
+                if self.get_type(v) not in ['long', 'date']
+                else {v: {"order": "asc"}}
                 for v in sort
             ]
 
         return eshelpers.scan(
-                                self.conn, 
-                                request_timeout=self.settings.config.getint("general", "es_timeout"), 
-                                index=self.settings.config.get("general", "es_index_pattern"), 
-                                query=query, 
-                                size=self.settings.config.getint("general", "es_scan_size"), 
-                                scroll=self.settings.config.get("general", "es_scroll_time"), 
-                                preserve_order=preserve_order, raise_on_error=True,
-                                terminate_after=self.settings.config.get("general", "es_terminate_after")
-                            )
+            self.conn,
+            request_timeout=self.settings.config.getint("general", "es_timeout"),
+            index=self.settings.config.get("general", "es_index_pattern"),
+            query=query,
+            size=self.settings.config.getint("general", "es_scan_size"),
+            scroll=self.settings.config.get("general", "es_scroll_time"),
+            preserve_order=preserve_order, raise_on_error=True,
+            terminate_after=self.settings.config.get("general", "es_terminate_after")
+        )
 
-    def time_based_scan(self, aggregator, fields_value_to_correlate, query_fields=None, lucene_query=None, drop_if_unknow_end=True):
+    def time_based_scan(
+        self, aggregator,
+        fields_value_to_correlate,
+        query_fields=None,
+        lucene_query=None,
+        drop_if_unknow_end=True
+    ):
         '''
         Params
         ======
-        - aggregator                (str) : Field used to group items (a process name for example)
-        - fields_value_to_correlate (str) : List of fields used to identify an item (a process pid for example)
+        - aggregator                (str) : Field used to group items 
+                                            (a process name for example)
+        - fields_value_to_correlate (str) : List of fields used to identify an item
+                                            (a process pid for example)
         - query_fields                    : Send to es.scan
         - lucene_query                    : Send to es.scan
         - drop_if_unknow_end       (bool) : What should I do if I can't find the end ? drop - zero_duration
-        
+
         Usage
         =====
         for aggregation, documents in time_based_scan(...):
@@ -302,11 +373,14 @@ class ES:
         def _agg_and_item(doc):
             # Return the aggregator value, the item hash and the timestamp of the document
             fields = self.extract_fields_from_document(doc)
-            
-            agg, *item_identifier = self.get_fields_by_path(doc, [aggregator] + fields_value_to_correlate)
-            
+
+            agg, *item_identifier = self.get_fields_by_path(
+                doc,
+                [aggregator] + fields_value_to_correlate
+            )
+
             item_hash = hash(frozenset(item_identifier))
-            
+
             if type(fields[timestamp_field]) is int:
                 timestamp = datetime.datetime.fromtimestamp(fields[timestamp_field])
             else:
@@ -336,7 +410,7 @@ class ES:
                     end_found = False
                 else:
                     end_found = True
-                
+
                 # New aggregation
                 if agg != aggr_gen.agg:
                     aggr_gen.agg = agg
@@ -351,7 +425,6 @@ class ES:
 
             # Stop the main loop
             aggr_gen.stop = True
-
 
         # Generator, documents are sorted by: aggregator - fields_value_to_correlate - timestamp
         sort = [aggregator, *[i for i in fields_value_to_correlate], timestamp_field]
@@ -372,7 +445,10 @@ def add_outlier_to_document(doc, outlier):
     if "outliers" in doc["_source"]:
         if outlier.get_summary() not in doc["_source"]["outliers"]["summary"]:
             merged_outliers = defaultdict(list)
-            for k, v in chain(doc["_source"]["outliers"].items(), outlier.get_outlier_dict_of_arrays().items()):
+            for k, v in chain(
+                doc["_source"]["outliers"].items(),
+                outlier.get_outlier_dict_of_arrays().items()
+            ):
 
                 # merge ["reason 1"] and ["reason 2"]] into ["reason 1", "reason 2"]
                 if isinstance(v, list):
@@ -419,11 +495,12 @@ def remove_tag_from_document(doc, tag):
 
 
 def build_search_query(
-                        bool_clause=None, 
-                        sort_clause=None,
-                        search_range=None,
-                        query_fields=None,
-                        lucene_query=None):
+    bool_clause=None, 
+    sort_clause=None,
+    search_range=None,
+    query_fields=None,
+    lucene_query=None):
+
     query = dict()
     query["query"] = dict()
     query["query"]["bool"] = dict()
@@ -433,7 +510,9 @@ def build_search_query(
         query["_source"] = query_fields
 
     if bool_clause:
-        query["query"]["bool"]["must"] = bool_clause["must"].copy()  # To avoid side effects (multiple search_range) when calling multiple times the function on the same bool_clause
+        # To avoid side effects (multiple search_range)
+        # when calling multiple times the function on the same bool_clause
+        query["query"]["bool"]["must"] = bool_clause["must"].copy()
 
     if sort_clause:
         query.update(sort_clause)
