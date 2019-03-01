@@ -127,7 +127,14 @@ def perform_analysis_with_in_aggregator(model_settings):
 	all_targets = {}
 	all_outliers = {}
 
-	for aggregation, documents in es.time_based_scan(model_settings["aggregator"], model_settings["fields_value_to_correlate"], query_fields=[], lucene_query=lucene_query):
+	extract_target = get_target_extractor(model_settings["target"])
+
+	for aggregation, documents in es.time_based_scan(
+		model_settings["aggregator"],
+		model_settings["fields_value_to_correlate"],
+		query_fields=[],
+		lucene_query=lucene_query
+	):
 		logging.logger.info('Aggregation: %s' % aggregation)
 
 		aggregations.append(aggregation)
@@ -141,13 +148,11 @@ def perform_analysis_with_in_aggregator(model_settings):
 			i_batch += 1
 
 			batch_docs = []
-			batch_starts = []
-			batch_durations = []
+			batch_targets = []
 
 			for i, (doc, start, duration) in enumerate(documents):
 				batch_docs.append(doc)	
-				batch_starts.append(start)
-				batch_durations.append(duration)
+				batch_targets.append(extract_target(start, duration))
 
 				if i == model_settings["batch_eval_size"]:
 					break
@@ -155,15 +160,13 @@ def perform_analysis_with_in_aggregator(model_settings):
 				# It's the last batch
 				read_next_batch = False
 
-			batch_targets = get_time_targets(batch_starts, batch_durations, model_settings["target"])
-
 			# Outliers detection
 			agg_outliers = UnivariateOutlier(
 				model_settings["trigger_method"],
 				model_settings["trigger_sensitivity"],
 				model_settings["n_neighbors"]
 			).detect_outliers(np.array(batch_targets))
-
+			
 			for index in agg_outliers:
 				process_outlier(batch_docs[index], model_settings, batch_targets[index])
 			
@@ -172,13 +175,9 @@ def perform_analysis_with_in_aggregator(model_settings):
 			
 			# Free the memory		
 			del batch_docs
-			del batch_starts
-			del batch_durations
 			del batch_targets
 			# Garbage collector
 			gc.collect()
-
-
 	
 	logging.logger.info('Number of aggregations: %i\t:\t' % len(aggregations))
 	logging.logger.info('Number of elements: %i' % sum([len(all_targets[t]) for t in all_targets]))
@@ -204,9 +203,9 @@ def perform_analysis_with_in_aggregator(model_settings):
 		p_data = np.delete(data, out)
 		p_out = data[out]
 		if not p_out.size:
-			plt.hist(p_data, label=['Data'], color=['darkblue'], stacked=True)
+			plt.hist(p_data, bins=40, label=['Data'], color=['darkblue'], stacked=True)
 		else:
-			plt.hist([p_out, p_data], label=['Outliers', 'Data'], color=['r', 'darkblue'], stacked=True)
+			plt.hist([p_out, p_data], bins=40, label=['Outliers', 'Data'], color=['r', 'darkblue'], stacked=True)
 
 		plt.title(model_settings["aggregator"] + ': ' + str(aggregation) + ' - ' + xlabel + ' - Histogram')
 		plt.xlabel(xlabel)
@@ -216,7 +215,7 @@ def perform_analysis_with_in_aggregator(model_settings):
 	plt.show()
 
 
-def get_time_targets(starts, durations, target):
+def get_target_extractor(target):
 	allowed = [
 		'start_timestamp', 'start_year', 'start_month', 'start_day', 'start_hour', 'start_minute', 
 		'end_timestamp', 'end_year', 'end_month', 'end_day', 'end_hour', 'end_minute',
@@ -224,40 +223,44 @@ def get_time_targets(starts, durations, target):
 	]
 
 	if target not in allowed:
-		raise 'Wrong time target'
+		raise Exception('Wrong time target')
 
 	if target.startswith('start_'):
 		target = target[6:]
 
-		values = []
-		for start in starts:
+		def ret(start, duration):
 			value = start.__getattribute__(target)
 			if type(value) is not int:
 				value = value()
-			values.append(value)
+			return value
 
-		return values
+		return ret
 
 	elif target.startswith('end_'):
 		target = target[4:]
 
-		values = []
-		for start, duration in zip(starts, durations):
+		def ret(start, duration):
 			duration = datetime.timedelta(0, duration)
 			value = (start + duration).__getattribute__(target)
 			if type(value) is not int:
 				value = value()
-			values.append(value)
+			return value
 
-		return values
+		return ret
 
 	elif target == 'duration':
-		return durations
+		def ret(start, duration):
+			return duration
+
+		return ret
 
 	elif target == 'log_duration':
-		return np.log10(np.array(durations)+1)
+		def ret(start, duration):
+			return np.log10(duration+1)
 
-	raise 'Wrong time target'
+		return ret
+
+	raise Exception('Wrong time target')
 
 
 def histogram_outliers(data, outliers=[], xlabel='Value', bins=10):
@@ -267,7 +270,8 @@ def histogram_outliers(data, outliers=[], xlabel='Value', bins=10):
     plt.hist([outliers, data], bins=bins, label=['Outliers', 'Data'], color=['r', 'darkblue'], stacked=True)
     plt.title(xlabel + ' - Histogram')
     plt.xlabel(xlabel)
-    plt.ylabel('Count')
+    plt.ylabel('Count [log]')
+    plt.yscale('log')
     plt.ylim(bottom=0.5)
     plt.legend()
     plt.show()
@@ -292,12 +296,9 @@ def extract_model_settings(section_name):
 	try:
 		model_settings["n_neighbors"] = settings.config.getint(section_name, "n_neighbors")
 	except:
-		if model_settings["trigger_method"] in ['lof, lof_stdev']:
-			raise Exception('n_neighbors is missing')
-		
 		model_settings["n_neighbors"] = 0
 
-	if model_settings["trigger_method"] not in ['mad', 'stdev', 'lof', 'lof_stdev']:
+	if model_settings["trigger_method"] not in ['mad', 'stdev', 'lof', 'lof_stdev', 'isolation_forest']:
 		raise 'Wrong trigger_method'
 
 	try:

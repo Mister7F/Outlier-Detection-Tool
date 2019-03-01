@@ -74,6 +74,8 @@ class TestES(unittest.TestCase):
 
 		h = ''
 
+		n_docs = 0
+
 		for aggregation, documents in es.time_based_scan(
 			aggregator=aggregator,
 			fields_value_to_correlate=fields_value_to_correlate,
@@ -85,10 +87,11 @@ class TestES(unittest.TestCase):
 
 			for i, (doc, start, duration) in enumerate(documents):
 				h = self._hash(doc['_id'] + h)
+				n_docs += 1
 
 		self.assertEqual(aggregations, [2, 9])
-		self.assertEqual(h, '4e1f6eb45db5479fa441de302373079c')
-
+		self.assertEqual(h, '5b6d661503e83bb2f8551cceee62940b')
+		self.assertEqual(n_docs, 1219)
 		
 
 		es.scan = tmp_scan

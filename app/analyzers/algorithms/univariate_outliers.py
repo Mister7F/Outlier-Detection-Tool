@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.neighbors import LocalOutlierFactor
-
+from sklearn.ensemble import IsolationForest
 
 class UnivariateOutlier():
 	def __init__(self, method='stdev', trigger_sensitity=3, n_neighbors=20):
@@ -29,6 +29,9 @@ class UnivariateOutlier():
 
 		elif self.method == 'lof_stdev':
 			return self._lof_stdev(data)
+
+		elif self.method == 'isolation_forest':
+			return self._isolation_forest(data)
 
 		raise ValueError('Wrong method', 'mad', 'stdev', 'lof', 'lof_stdev')
 
@@ -78,3 +81,14 @@ class UnivariateOutlier():
 		lofs = clf.score_samples(data)
 		
 		return self._stdev(lofs)
+
+	def _isolation_forest(self, data):
+		clf = IsolationForest(
+			behaviour='new',
+			max_samples=data.size,
+			contamination=self.trigger_sensitity/100
+		)
+		clf.fit(data.reshape(-1, 1))
+		predictions = clf.predict(data.reshape(-1, 1))
+
+		return np.arange(data.shape[0])[predictions < 0]
