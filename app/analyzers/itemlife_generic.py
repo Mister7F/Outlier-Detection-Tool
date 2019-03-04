@@ -84,7 +84,7 @@ def perform_analysis_across_aggregators(model_settings):
 		elif model_settings['target'] == 'events_per_minute':
 			start_agg = min(agg_starts)
 			end_agg = max(agg_starts)
-			aggregator_time_range = ((end_agg-start_agg).total_seconds()/60) + 1
+			aggregator_time_range = ((end_agg - start_agg).total_seconds() / 60) + 1
 			n_events = len(agg_starts) - 1
 			aggregations_target.append(n_events/aggregator_time_range)
 
@@ -102,10 +102,9 @@ def perform_analysis_across_aggregators(model_settings):
 		model_settings["n_neighbors"]
 	).detect_outliers(aggregations_target)
 
-	tmp = np.ones(aggregations_target.shape); tmp[outliers] = 0
 	histogram_outliers(
-		aggregations_target[tmp==1],
-		aggregations_target[tmp==0],
+		np.delete(aggregations_target, outliers),
+		aggregations_target[outliers],
 		xlabel=model_settings["target"],
 		bins=48
 	)
@@ -114,7 +113,11 @@ def perform_analysis_across_aggregators(model_settings):
 		agg = aggregations[outlier]
 		# Process only the first doc of the aggregation,
 		# this document represent the aggregation...
-		process_outlier(aggregations_docs[outlier], model_settings, aggregations_target[outlier])
+		process_outlier(
+			aggregations_docs[outlier],
+			model_settings,
+			aggregations_target[outlier]
+		)
 
 
 def perform_analysis_with_in_aggregator(model_settings):
@@ -168,16 +171,24 @@ def perform_analysis_with_in_aggregator(model_settings):
 			).detect_outliers(np.array(batch_targets))
 			
 			for index in agg_outliers:
-				process_outlier(batch_docs[index], model_settings, batch_targets[index])
+				process_outlier(
+					batch_docs[index],
+					model_settings,
+					batch_targets[index]
+				)
 			
 			all_targets[aggregation].extend(batch_targets)
-			all_outliers[aggregation].extend([a + len(all_outliers[aggregation]) for a in agg_outliers])
+			all_outliers[aggregation].extend([
+				a + len(all_outliers[aggregation])
+				for a in agg_outliers
+			])
 			
-			# Free the memory		
+			# Freevalue_iteration the memory
 			del batch_docs
 			del batch_targets
 			# Garbage collector
 			gc.collect()
+
 	
 	logging.logger.info('Number of aggregations: %i\t:\t' % len(aggregations))
 	logging.logger.info('Number of elements: %i' % sum([len(all_targets[t]) for t in all_targets]))
@@ -191,6 +202,7 @@ def perform_analysis_with_in_aggregator(model_settings):
 		return
 
 	plt.gcf().subplots_adjust(hspace=1)
+	# Todo: merge this with "plot_outliers_histogram"
 	for i, aggregation in enumerate(all_targets):
 		plt.subplot(n_rows, n_cols, i+1)
 
@@ -267,7 +279,13 @@ def histogram_outliers(data, outliers=[], xlabel='Value', bins=10):
     xlabel = ' '.join(xlabel.split('_'))
     xlabel = xlabel[0].upper() + xlabel[1:]
 
-    plt.hist([outliers, data], bins=bins, label=['Outliers', 'Data'], color=['r', 'darkblue'], stacked=True)
+    plt.hist(
+    	[outliers, data],
+    	bins=bins,
+    	label=['Outliers', 'Data'],
+    	color=['r', 'darkblue'],
+    	stacked=True
+    )
     plt.title(xlabel + ' - Histogram')
     plt.xlabel(xlabel)
     plt.ylabel('Count [log]')

@@ -33,7 +33,7 @@ class UnivariateOutlier():
 		elif self.method == 'isolation_forest':
 			return self._isolation_forest(data)
 
-		raise ValueError('Wrong method', 'mad', 'stdev', 'lof', 'lof_stdev')
+		raise ValueError('Wrong method', 'mad', 'stdev', 'lof', 'lof_stdev', 'isolation_forest')
 
 	def _mad(self, data):
 		mad = np.median(abs(data-np.median(data)))
@@ -48,7 +48,7 @@ class UnivariateOutlier():
 
 	def _lof(self, data):
 
-		if data.shape[0] < 10:
+		if data.shape[0] <= self.n_neighbors:
 			# Not enough data to find outliers...
 			return []
 
@@ -65,7 +65,7 @@ class UnivariateOutlier():
 		return np.arange(data.shape[0])[predictions < 0]
 
 	def _lof_stdev(self, data):
-		if data.shape[0] < 10:
+		if data.shape[0] <= self.n_neighbors:
 			# Not enough data to find outliers...
 			return []
 
@@ -92,3 +92,7 @@ class UnivariateOutlier():
 		predictions = clf.predict(data.reshape(-1, 1))
 
 		return np.arange(data.shape[0])[predictions < 0]
+
+	# Todo
+	def _low_dete...
+	def high_detection
