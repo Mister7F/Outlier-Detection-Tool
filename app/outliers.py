@@ -24,7 +24,7 @@ from analyzers import clustering_str_k_mean_generic
 from analyzers import sentence_prediction_generic
 from analyzers import decision_tree_generic
 from analyzers import itemlife_generic
-
+from analyzers import duration_generic
 
 ##############
 # Entrypoint #
@@ -61,6 +61,7 @@ def perform_analysis():
     decision_tree_generic.perform_analysis()
     sentence_prediction_generic.perform_analysis()
     itemlife_generic.perform_analysis()
+    duration_generic.perform_analysis()
 
 
 # Prepare log messages

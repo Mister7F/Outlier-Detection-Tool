@@ -438,6 +438,93 @@ class ES:
         while not aggr_gen.stop:
             yield aggr_gen.agg, aggr_gen()
 
+    def scan_duration(
+        self,
+        aggregator,
+        lucene_query,
+        start_end_field,
+        start_value,
+        end_value,
+        fields_value_to_correlate,
+        drop_if_unknow_start=True,
+        drop_if_unknow_end=True
+    ):
+        '''
+        Usage
+        =====
+        for aggregation, documents in time_based_scan(...):
+            for doc, start, duration in documents:
+                pass
+        '''
+
+        def aggregation_iterator():
+            pass
+
+
+        timestamp_field = self.settings.config.get("general", "timestamp_field")
+        sort = [aggregator, *[i for i in fields_value_to_correlate], timestamp_field]
+
+        previous_doc = None
+        previous_item_identifier = None
+
+        start_doc = None
+        end_doc = None
+
+        def generate_return_value(start_doc, end_doc):
+            start_fields = self.extract_fields_from_document(start_doc)
+            end_fields = self.extract_fields_from_document(end_doc)
+
+            if type(start_fields[timestamp_field]) is int:
+                start_time = datetime.datetime.fromtimestamp(start_fields[timestamp_field])
+                end_time = datetime.datetime.fromtimestamp(end_fields[timestamp_field])
+            else:
+                start_time = dateutil.parser.parse(start_fields[timestamp_field])
+                end_time = dateutil.parser.parse(end_fields[timestamp_field])
+
+            return start_doc, start_time, (end_time - start_time).total_seconds()
+
+        for doc in self.scan(lucene_query=lucene_query, sort=sort):
+            agg, *item_identifier, start_flag = self.get_fields_by_path(
+                doc,
+                [*fields_value_to_correlate, start_end_field]
+            )
+            start_flag = str(start_flag)
+
+            if item_identifier != previous_item_identifier:
+                # New item
+                if start_doc is None and not drop_if_unknow_start:
+                    # Unknow start
+                    yield generate_return_value(start_doc, end_doc)
+
+                elif end_doc is None and not drop_if_unknow_end:
+                    # Unknow end
+                    yield generate_return_value(start_doc, end_doc)
+
+                elif start_doc is not None and end_doc is not None:
+                    yield generate_return_value(start_doc, end_doc)
+
+                start_doc = None
+                end_doc = None
+
+            if start_flag == start_value and start_doc is None:
+                start_doc = doc
+
+            elif start_flag == end_value:
+                end_doc = doc
+
+            previous_doc = doc
+            previous_item_identifier = item_identifier
+
+
+
+
+
+
+
+
+
+
+
 
 def add_outlier_to_document(doc, outlier):
     doc = add_tag_to_document(doc, "outlier")

@@ -92,7 +92,3 @@ class UnivariateOutlier():
 		predictions = clf.predict(data.reshape(-1, 1))
 
 		return np.arange(data.shape[0])[predictions < 0]
-
-	# Todo
-	def _low_dete...
-	def high_detection
