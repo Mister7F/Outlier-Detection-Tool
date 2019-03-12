@@ -18,7 +18,7 @@ class TestES(unittest.TestCase):
         m.update(data.encode('utf-8'))
         return m.hexdigest()
 
-    def test_onthot_encode(self):       
+    def test_onthot_encode(self):
         self.assertEqual(es.get_field_by_path(self.test_doc, 'OsqueryFilter.md5'), 'cb2a1c2ea227f0338e7f3a8bc03c3d6e')
         self.assertEqual(es.get_field_by_path(self.test_doc, 'meta.logged_in_users_details.time'), '1529997655')
 
@@ -27,26 +27,21 @@ class TestES(unittest.TestCase):
             es.get_fields_by_path(
                 self.test_doc,
                 ['OsqueryFilter.md5', 'meta.logged_in_users_details.time']
-            ), 
+            ),
             ['cb2a1c2ea227f0338e7f3a8bc03c3d6e', '1529997655']
         )
 
     def test_get_type(self):
-        mapping = json.load(open(self.path_mapping))        
-        
+        mapping = json.load(open(self.path_mapping))
+
         def custom_get_mapping(*args, index=None):
             return mapping
-
-        def get_parameter(section, name):
-            if section == 'general' and name == 'es_index_pattern':
-                return 'host_events'
-            elif section == 'general' and name == 'timestamp_field':
-                return 'Time'
 
         es.conn = es
         es.conn.indices = es
         es.conn.indices.get_mapping = custom_get_mapping
-        es.settings.config.get = get_parameter
+        es.settings.config.set('general', 'es_index_pattern', 'host_events')
+        es.settings.config.set('general', 'timestamp_field', 'Time')
 
         self.assertEqual(es.get_type('SubjectLogonID'), 'text')
 
@@ -70,7 +65,7 @@ class TestES(unittest.TestCase):
         aggregator = 'LogonType'
         fields_value_to_correlate = ['LogHost', 'UserName', 'LogonID']
         lucene_query = es.filter_by_query_string('(EventID:4624 OR EventID:4634) AND _exists_:LogonID AND _exists_:LogHost AND (LogonType: 2 OR LogonType: 9)')
-        
+
         aggregations = []
 
         h = ''
@@ -93,7 +88,6 @@ class TestES(unittest.TestCase):
         self.assertEqual(aggregations, [2, 9])
         self.assertEqual(h, '5b6d661503e83bb2f8551cceee62940b')
         self.assertEqual(n_docs, 1219)
-        
 
         es.scan = tmp_scan
         es.get_type = tmp_get_type
@@ -114,6 +108,7 @@ class TestES(unittest.TestCase):
         # Overwrite functions which read the ES database
         es.scan = custom_es_scan
         es.get_type = custom_get_type
+        es.settings.config.set('general', 'timestamp_field', 'Time')
 
         aggregator = 'LogonType'
         fields_value_to_correlate = ['LogHost', 'UserName', 'LogonID']
@@ -128,9 +123,8 @@ class TestES(unittest.TestCase):
         for aggregation, documents in es.scan_duration(
             aggregator=aggregator,
             lucene_query=lucene_query,
-            start_end_field='EventID',
-            start_value='4624',
-            end_value='4634',
+            start_condition={"EventID": 4624},
+            end_condition={"EventID": 4634},
             fields_value_to_correlate=fields_value_to_correlate,
             drop_if_unknow_start=True,
             drop_if_unknow_end=True
@@ -144,7 +138,6 @@ class TestES(unittest.TestCase):
         self.assertEqual(aggregations, [0, 2, 3])
         self.assertEqual(h, 'b0ab322a6edb72f6ade8d7db0306336e')
         self.assertEqual(n_docs, 16047)
-        
 
         es.scan = tmp_scan
         es.get_type = tmp_get_type

@@ -8,7 +8,7 @@ import helpers
 from helpers.outlier import Outlier
 from helpers.singletons import settings, es, logging
 from helpers.text_processing import class_to_id
-from analyzers.algorithms.univariate_outliers import UnivariateOutlier
+from helpers.outliers_detection import outliers_detection
 
 
 def perform_analysis():
@@ -98,11 +98,13 @@ def perform_analysis_across_aggregators(model_settings):
     aggregations_target = np.array(aggregations_target)
 
     # Outliers detection
-    outliers = UnivariateOutlier(
+    outliers = outliers_detection(
+        aggregations_target,
         model_settings["trigger_method"],
         model_settings["trigger_sensitivity"],
-        model_settings["n_neighbors"]
-    ).detect_outliers(aggregations_target)
+        model_settings["n_neighbors"],
+        model_settings["trigger_on"]
+    )
 
     histogram_outliers(
         np.delete(aggregations_target, outliers),
@@ -166,11 +168,13 @@ def perform_analysis_with_in_aggregator(model_settings):
                 read_next_batch = False
 
             # Outliers detection
-            agg_outliers = UnivariateOutlier(
+            agg_outliers = outliers_detection(
+                np.array(batch_targets),
                 model_settings["trigger_method"],
                 model_settings["trigger_sensitivity"],
-                model_settings["n_neighbors"]
-            ).detect_outliers(np.array(batch_targets))
+                model_settings["n_neighbors"],
+                model_settings["trigger_on"]
+            )
 
             for index in agg_outliers:
                 process_outlier(
@@ -331,6 +335,10 @@ def extract_model_settings(section_name):
     model_settings["target"] = settings.config.get(section_name, "target")
     model_settings["trigger_method"] = settings.config.get(
         section_name, "trigger_method")
+    try:
+        model_settings["trigger_on"] = settings.config.get(section_name, "trigger_on")
+    except Exception:
+        model_settings["trigger_on"] = None
     model_settings["trigger_sensitivity"] = settings.config.getfloat(
         section_name, "trigger_sensitivity")
     model_settings["batch_eval_size"] = settings.config.getint(
