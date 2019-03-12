@@ -3,7 +3,6 @@ import numpy as np
 import configparser
 
 import helpers.utils
-from helpers.ploter import *
 from collections import Counter
 from collections import defaultdict
 from helpers.outlier import Outlier

@@ -10,7 +10,7 @@ from helpers.outlier import Outlier
 from helpers.singletons import settings, es, logging
 from helpers.text_processing import class_to_id
 from helpers.outliers_detection import outliers_detection
-from helpers.ploter import *
+from helpers.plotter import *
 
 
 def perform_analysis():
