@@ -36,6 +36,8 @@ class FileModificationWatcher:
 def flatten_dict(d, parent_key='', sep='.'):
     items = []
     for k, v in d.items():
+        k = k.replace('\\', '\\\\')
+        k = k.replace(sep, '\\.')
         new_key = parent_key + sep + k if parent_key else k
         if isinstance(v, collections.MutableMapping):
             items.extend(flatten_dict(v, new_key, sep=sep).items())

@@ -47,7 +47,7 @@ logging.logger.info("run mode: " + settings.args.run_mode)
 logging.print_generic_intro("initializing")
 
 
-def perform_analysis():    
+def perform_analysis():
     test_generic.perform_analysis()
     beaconing_generic.perform_analysis()
     metrics_generic.perform_analysis()

@@ -12,267 +12,283 @@ from analyzers.algorithms.univariate_outliers import UnivariateOutlier
 
 
 def perform_analysis():
-	for section_name in settings.config.sections():
-		if not section_name.startswith('itemlife_'):
-			continue
+    for section_name in settings.config.sections():
+        if not section_name.startswith('itemlife_'):
+            continue
 
-		logging.logger.info('# Section ' + ' '.join(section_name[9:].split('_')) + ' #')
+        logging.logger.info(
+            '# Section ' + ' '.join(section_name[9:].split('_')) + ' #')
 
-		model_settings = extract_model_settings(section_name)
+        model_settings = extract_model_settings(section_name)
 
-		across_aggregator_target = [
-			'number_of_events',
-			'max_duration',
-			'min_duration',
-			'mean_duration',
-			'events_per_minute'
-		]
-		
-		if model_settings['target'] in across_aggregator_target:
-			perform_analysis_across_aggregators(model_settings)
-		else:
-			perform_analysis_with_in_aggregator(model_settings)
+        across_aggregator_target = [
+            'number_of_events',
+            'max_duration',
+            'min_duration',
+            'mean_duration',
+            'events_per_minute'
+        ]
 
-		
-def perform_analysis_across_aggregators(model_settings):	
-	lucene_query = es.filter_by_query_string(model_settings["es_query_filter"])
+        if model_settings['target'] in across_aggregator_target:
+            perform_analysis_across_aggregators(model_settings)
+        else:
+            perform_analysis_with_in_aggregator(model_settings)
 
-	total_documents = es.count_documents(lucene_query=lucene_query)
-	logging.logger.info('Total documents: %i' % total_documents)
 
-	aggregations = []
-	aggregations_docs = []
+def perform_analysis_across_aggregators(model_settings):
+    lucene_query = es.filter_by_query_string(model_settings["es_query_filter"])
 
-	# Field analyzed across aggregators
-	aggregations_target = []
+    total_documents = es.count_documents(lucene_query=lucene_query)
+    logging.logger.info('Total documents: %i' % total_documents)
 
-	for aggregation, documents in es.time_based_scan(
-			model_settings["aggregator"],
-			model_settings["fields_value_to_correlate"],
-			query_fields=[],
-			lucene_query=lucene_query
-		):
-		aggregations.append(aggregation)
+    aggregations = []
+    aggregations_docs = []
 
-		agg_starts = []
-		agg_durations = []
+    # Field analyzed across aggregators
+    aggregations_target = []
 
-		for doc, start, duration in documents:
-			# Keep only the first document for each aggregator
-			if len(aggregations_docs) < len(aggregations):
-				aggregations_docs.append(doc)
+    for aggregation, documents in es.time_based_scan(
+        model_settings["aggregator"],
+        model_settings["fields_value_to_correlate"],
+        query_fields=[],
+        lucene_query=lucene_query
+    ):
+        aggregations.append(aggregation)
 
-			agg_starts.append(start)
-			agg_durations.append(duration)
+        agg_starts = []
+        agg_durations = []
 
-		if not len(agg_starts):
-			continue
-	
-		# Get method
-		if model_settings['target'] == 'number_of_events':
-			aggregations_target.append(len(agg_starts))
+        for doc, start, duration in documents:
+            # Keep only the first document for each aggregator
+            if len(aggregations_docs) < len(aggregations):
+                aggregations_docs.append(doc)
 
-		elif model_settings['target'] == 'max_duration':
-			aggregations_target.append(max(agg_durations))
+            agg_starts.append(start)
+            agg_durations.append(duration)
 
-		elif model_settings['target'] == 'min_duration':
-			aggregations_target.append(min(agg_durations))
+        if not len(agg_starts):
+            continue
 
-		elif model_settings['target'] == 'mean_duration':
-			aggregations_target.append(np.array(agg_durations).mean())
+        # Get method
+        if model_settings['target'] == 'number_of_events':
+            aggregations_target.append(len(agg_starts))
 
-		elif model_settings['target'] == 'events_per_minute':
-			start_agg = min(agg_starts)
-			end_agg = max(agg_starts)
-			aggregator_time_range = ((end_agg - start_agg).total_seconds() / 60) + 1
-			n_events = len(agg_starts) - 1
-			aggregations_target.append(n_events/aggregator_time_range)
+        elif model_settings['target'] == 'max_duration':
+            aggregations_target.append(max(agg_durations))
 
-			logging.logger.info(
-				'Aggregation %s has %i events in %s minutes' 
-				% (str(aggregation), len(agg_starts), aggregator_time_range)
-			)
+        elif model_settings['target'] == 'min_duration':
+            aggregations_target.append(min(agg_durations))
 
-	aggregations_target = np.array(aggregations_target)
+        elif model_settings['target'] == 'mean_duration':
+            aggregations_target.append(np.array(agg_durations).mean())
 
-	# Outliers detection
-	outliers = UnivariateOutlier(
-		model_settings["trigger_method"],
-		model_settings["trigger_sensitivity"],
-		model_settings["n_neighbors"]
-	).detect_outliers(aggregations_target)
+        elif model_settings['target'] == 'events_per_minute':
+            start_agg = min(agg_starts)
+            end_agg = max(agg_starts)
+            aggregator_time_range = (
+                (end_agg - start_agg).total_seconds() / 60) + 1
+            n_events = len(agg_starts) - 1
+            aggregations_target.append(n_events/aggregator_time_range)
 
-	histogram_outliers(
-		np.delete(aggregations_target, outliers),
-		aggregations_target[outliers],
-		xlabel=model_settings["target"],
-		bins=48
-	)
+            logging.logger.info(
+                'Aggregation %s has %i events in %s minutes'
+                % (str(aggregation), len(agg_starts), aggregator_time_range)
+            )
 
-	for outlier in outliers:
-		agg = aggregations[outlier]
-		# Process only the first doc of the aggregation,
-		# this document represent the aggregation...
-		process_outlier(
-			aggregations_docs[outlier],
-			model_settings,
-			aggregations_target[outlier]
-		)
+    aggregations_target = np.array(aggregations_target)
+
+    # Outliers detection
+    outliers = UnivariateOutlier(
+        model_settings["trigger_method"],
+        model_settings["trigger_sensitivity"],
+        model_settings["n_neighbors"]
+    ).detect_outliers(aggregations_target)
+
+    histogram_outliers(
+        np.delete(aggregations_target, outliers),
+        aggregations_target[outliers],
+        xlabel=model_settings["target"],
+        bins=48
+    )
+
+    for outlier in outliers:
+        agg = aggregations[outlier]
+        # Process only the first doc of the aggregation,
+        # this document represent the aggregation...
+        process_outlier(
+            aggregations_docs[outlier],
+            model_settings,
+            aggregations_target[outlier]
+        )
 
 
 def perform_analysis_with_in_aggregator(model_settings):
-	lucene_query = es.filter_by_query_string(model_settings["es_query_filter"])
+    lucene_query = es.filter_by_query_string(model_settings["es_query_filter"])
 
-	total_documents = es.count_documents(lucene_query=lucene_query)
-	logging.logger.info('Total documents: %i' % total_documents)
+    total_documents = es.count_documents(lucene_query=lucene_query)
+    logging.logger.info('Total documents: %i' % total_documents)
 
-	aggregations = []
-	all_targets = {}
-	all_outliers = {}
+    aggregations = []
+    all_targets = {}
+    all_outliers = {}
 
-	extract_target = get_target_extractor(model_settings["target"])
+    extract_target = get_target_extractor(model_settings["target"])
 
-	for aggregation, documents in es.time_based_scan(
-		model_settings["aggregator"],
-		model_settings["fields_value_to_correlate"],
-		query_fields=[],
-		lucene_query=lucene_query
-	):
-		logging.logger.info('Aggregation: %s' % aggregation)
+    for aggregation, documents in es.time_based_scan(
+            model_settings["aggregator"],
+            model_settings["fields_value_to_correlate"],
+            query_fields=[],
+            lucene_query=lucene_query
+    ):
+        logging.logger.info('Aggregation: %s' % aggregation)
 
-		aggregations.append(aggregation)
-		all_targets[aggregation] = []
-		all_outliers[aggregation] = []
+        aggregations.append(aggregation)
+        all_targets[aggregation] = []
+        all_outliers[aggregation] = []
 
-		read_next_batch = True
-		i_batch = 0
-		while read_next_batch:
-			logging.logger.info('Batch %i' % i_batch)
-			i_batch += 1
+        read_next_batch = True
+        i_batch = 0
+        while read_next_batch:
+            logging.logger.info('Batch %i' % i_batch)
+            i_batch += 1
 
-			batch_docs = []
-			batch_targets = []
+            batch_docs = []
+            batch_targets = []
 
-			for i, (doc, start, duration) in enumerate(documents):
-				batch_docs.append(doc)	
-				batch_targets.append(extract_target(start, duration))
+            for i, (doc, start, duration) in enumerate(documents):
+                batch_docs.append(doc)
+                batch_targets.append(extract_target(start, duration))
 
-				if i == model_settings["batch_eval_size"]:
-					break
-			else:
-				# It's the last batch
-				read_next_batch = False
+                if i == model_settings["batch_eval_size"]:
+                    break
+            else:
+                # It's the last batch
+                read_next_batch = False
 
-			# Outliers detection
-			agg_outliers = UnivariateOutlier(
-				model_settings["trigger_method"],
-				model_settings["trigger_sensitivity"],
-				model_settings["n_neighbors"]
-			).detect_outliers(np.array(batch_targets))
-			
-			for index in agg_outliers:
-				process_outlier(
-					batch_docs[index],
-					model_settings,
-					batch_targets[index]
-				)
-			
-			all_targets[aggregation].extend(batch_targets)
-			all_outliers[aggregation].extend([
-				a + len(all_outliers[aggregation])
-				for a in agg_outliers
-			])
-			
-			# Freevalue_iteration the memory
-			del batch_docs
-			del batch_targets
-			# Garbage collector
-			gc.collect()
+            # Outliers detection
+            agg_outliers = UnivariateOutlier(
+                model_settings["trigger_method"],
+                model_settings["trigger_sensitivity"],
+                model_settings["n_neighbors"]
+            ).detect_outliers(np.array(batch_targets))
 
-	
-	logging.logger.info('Number of aggregations: %i\t:\t' % len(aggregations))
-	logging.logger.info('Number of elements: %i' % sum([len(all_targets[t]) for t in all_targets]))
+            for index in agg_outliers:
+                process_outlier(
+                    batch_docs[index],
+                    model_settings,
+                    batch_targets[index]
+                )
 
-	# Plot the histogram
-	n_cols = min(3, len(all_targets))
-	n_rows = math.ceil(len(all_targets) / n_cols)
+            all_targets[aggregation].extend(batch_targets)
+            all_outliers[aggregation].extend([
+                a + len(all_outliers[aggregation])
+                for a in agg_outliers
+            ])
 
-	if n_rows > 20:
-		logging.logger.info('To many aggregation to plot graph...')
-		return
+            # Freevalue_iteration the memory
+            del batch_docs
+            del batch_targets
+            # Garbage collector
+            gc.collect()
 
-	plt.gcf().subplots_adjust(hspace=1)
-	# Todo: merge this with "plot_outliers_histogram"
-	for i, aggregation in enumerate(all_targets):
-		plt.subplot(n_rows, n_cols, i+1)
+    logging.logger.info('Number of aggregations: %i\t:\t' % len(aggregations))
+    logging.logger.info('Number of elements: %i' %
+                        sum([len(all_targets[t]) for t in all_targets]))
 
-		xlabel = ' '.join(model_settings["target"].split('_'))
-		xlabel = xlabel[0].upper() + xlabel[1:]
+    # Plot the histogram
+    n_cols = min(3, len(all_targets))
+    n_rows = math.ceil(len(all_targets) / n_cols)
 
-		data = np.array(all_targets[aggregation])
-		out = all_outliers[aggregation]
+    if n_rows > 20:
+        logging.logger.info('To many aggregation to plot graph...')
+        return
 
-		p_data = np.delete(data, out)
-		p_out = data[out]
-		if not p_out.size:
-			plt.hist(p_data, bins=40, label=['Data'], color=['darkblue'], stacked=True)
-		else:
-			plt.hist([p_out, p_data], bins=40, label=['Outliers', 'Data'], color=['r', 'darkblue'], stacked=True)
+    plt.gcf().subplots_adjust(hspace=1)
 
-		plt.title(model_settings["aggregator"] + ': ' + str(aggregation) + ' - ' + xlabel + ' - Histogram')
-		plt.xlabel(xlabel)
-		plt.ylabel('Count')
-		plt.legend()
+    for i, aggregation in enumerate(all_targets):
+        plt.subplot(n_rows, n_cols, i+1)
 
-	plt.show()
+        xlabel = ' '.join(model_settings["target"].split('_'))
+        xlabel = xlabel[0].upper() + xlabel[1:]
+
+        data = np.array(all_targets[aggregation])
+        out = all_outliers[aggregation]
+
+        p_data = np.delete(data, out)
+        p_out = data[out]
+
+        if not p_out.size:
+            plt.hist(
+                p_data,
+                bins=40,
+                label=['Data'],
+                color=['darkblue'],
+                stacked=True
+            )
+        else:
+            plt.hist(
+                [p_out, p_data],
+                bins=40,
+                label=['Outliers', 'Data'],
+                color=['r', 'darkblue'], 
+                stacked=True
+            )
+
+        plt.title(model_settings["aggregator"] + ': ' +
+                  str(aggregation) + ' - ' + xlabel + ' - Histogram')
+        plt.xlabel(xlabel)
+        plt.ylabel('Count')
+        plt.legend()
+
+    plt.show()
 
 
 def get_target_extractor(target):
-	allowed = [
-		'start_timestamp', 'start_year', 'start_month', 'start_day', 'start_hour', 'start_minute', 
-		'end_timestamp', 'end_year', 'end_month', 'end_day', 'end_hour', 'end_minute',
-		'duration', 'log_duration'
-	]
+    allowed = [
+        'start_timestamp', 'start_year', 'start_month', 'start_day', 'start_hour', 'start_minute',
+        'end_timestamp', 'end_year', 'end_month', 'end_day', 'end_hour', 'end_minute',
+        'duration', 'log_duration'
+    ]
 
-	if target not in allowed:
-		raise Exception('Wrong time target')
+    if target not in allowed:
+        raise Exception('Wrong time target')
 
-	if target.startswith('start_'):
-		target = target[6:]
+    if target.startswith('start_'):
+        target = target[6:]
 
-		def ret(start, duration):
-			value = start.__getattribute__(target)
-			if type(value) is not int:
-				value = value()
-			return value
+        def ret(start, duration):
+            value = start.__getattribute__(target)
+            if type(value) is not int:
+                value = value()
+            return value
 
-		return ret
+        return ret
 
-	elif target.startswith('end_'):
-		target = target[4:]
+    elif target.startswith('end_'):
+        target = target[4:]
 
-		def ret(start, duration):
-			duration = datetime.timedelta(0, duration)
-			value = (start + duration).__getattribute__(target)
-			if type(value) is not int:
-				value = value()
-			return value
+        def ret(start, duration):
+            duration = datetime.timedelta(0, duration)
+            value = (start + duration).__getattribute__(target)
+            if type(value) is not int:
+                value = value()
+            return value
 
-		return ret
+        return ret
 
-	elif target == 'duration':
-		def ret(start, duration):
-			return duration
+    elif target == 'duration':
+        def ret(start, duration):
+            return duration
 
-		return ret
+        return ret
 
-	elif target == 'log_duration':
-		def ret(start, duration):
-			return np.log10(duration+1)
+    elif target == 'log_duration':
+        def ret(start, duration):
+            return np.log10(duration+1)
 
-		return ret
+        return ret
 
-	raise Exception('Wrong time target')
+    raise Exception('Wrong time target')
 
 
 def histogram_outliers(data, outliers=[], xlabel='Value', bins=10):
@@ -280,11 +296,11 @@ def histogram_outliers(data, outliers=[], xlabel='Value', bins=10):
     xlabel = xlabel[0].upper() + xlabel[1:]
 
     plt.hist(
-    	[outliers, data],
-    	bins=bins,
-    	label=['Outliers', 'Data'],
-    	color=['r', 'darkblue'],
-    	stacked=True
+        [outliers, data],
+        bins=bins,
+        label=['Outliers', 'Data'],
+        color=['r', 'darkblue'],
+        stacked=True
     )
     plt.title(xlabel + ' - Histogram')
     plt.xlabel(xlabel)
@@ -296,45 +312,60 @@ def histogram_outliers(data, outliers=[], xlabel='Value', bins=10):
 
 
 def extract_model_settings(section_name):
-	model_settings = dict()
+    model_settings = dict()
 
-	model_settings["es_query_filter"] = settings.config.get(section_name, "es_query_filter")
-	model_settings["aggregator"] = settings.config.get(section_name, "aggregator")
-	model_settings["fields_value_to_correlate"] = settings.config.get(section_name, "fields_value_to_correlate").split(',')
+    model_settings["es_query_filter"] = settings.config.get(
+        section_name, "es_query_filter")
+    model_settings["aggregator"] = settings.config.get(
+        section_name, "aggregator")
+    model_settings["fields_value_to_correlate"] = settings.config.get(
+        section_name, "fields_value_to_correlate").split(',')
 
-	model_settings["outlier_reason"] = settings.config.get(section_name, "outlier_reason")
-	model_settings["outlier_type"] = settings.config.get(section_name, "outlier_type")
-	model_settings["outlier_summary"] = settings.config.get(section_name, "outlier_summary")
+    model_settings["outlier_reason"] = settings.config.get(
+        section_name, "outlier_reason")
+    model_settings["outlier_type"] = settings.config.get(
+        section_name, "outlier_type")
+    model_settings["outlier_summary"] = settings.config.get(
+        section_name, "outlier_summary")
 
-	model_settings["target"] = settings.config.get(section_name, "target")
-	model_settings["trigger_method"] = settings.config.get(section_name, "trigger_method")
-	model_settings["trigger_sensitivity"] = settings.config.getfloat(section_name, "trigger_sensitivity")
-	model_settings["batch_eval_size"] = settings.config.getint(section_name, "batch_eval_size")
+    model_settings["target"] = settings.config.get(section_name, "target")
+    model_settings["trigger_method"] = settings.config.get(
+        section_name, "trigger_method")
+    model_settings["trigger_sensitivity"] = settings.config.getfloat(
+        section_name, "trigger_sensitivity")
+    model_settings["batch_eval_size"] = settings.config.getint(
+        section_name, "batch_eval_size")
 
-	try:
-		model_settings["n_neighbors"] = settings.config.getint(section_name, "n_neighbors")
-	except:
-		model_settings["n_neighbors"] = 0
+    try:
+        model_settings["n_neighbors"] = settings.config.getint(
+            section_name, "n_neighbors")
+    except:
+        model_settings["n_neighbors"] = 0
 
-	if model_settings["trigger_method"] not in ['mad', 'stdev', 'lof', 'lof_stdev', 'isolation_forest']:
-		raise 'Wrong trigger_method'
+    if model_settings["trigger_method"] not in ['mad', 'stdev', 'lof', 'lof_stdev', 'isolation_forest']:
+        raise 'Wrong trigger_method'
 
-	try:
-		model_settings["should_notify"] = settings.config.getboolean("notifier", "email_notifier") and settings.config.getboolean(section_name, "should_notify")
-	except configparser.NoOptionError:
-		model_settings["should_notify"] = False
+    try:
+        model_settings["should_notify"] = settings.config.getboolean(
+            "notifier", "email_notifier") and settings.config.getboolean(section_name, "should_notify")
+    except configparser.NoOptionError:
+        model_settings["should_notify"] = False
 
-	return model_settings
+    return model_settings
 
 
-def process_outlier(doc, model_settings, target):    
+def process_outlier(doc, model_settings, target):
     fields = es.extract_fields_from_document(doc)
 
-    outlier_summary = model_settings["outlier_summary"].replace('<target>', str(target))
-    outlier_summary = helpers.utils.replace_placeholder_fields_with_values(outlier_summary, fields)
+    outlier_summary = model_settings["outlier_summary"].replace(
+        '<target>', str(target))
+    outlier_summary = helpers.utils.replace_placeholder_fields_with_values(
+        outlier_summary, fields)
 
-    outlier = Outlier(type=model_settings["outlier_type"], reason=model_settings["outlier_reason"], summary=outlier_summary)
+    outlier = Outlier(type=model_settings["outlier_type"],
+                      reason=model_settings["outlier_reason"], summary=outlier_summary)
 
-    es.process_outliers(doc=doc, outliers=[outlier], should_notify=model_settings["should_notify"])
+    es.process_outliers(doc=doc, outliers=[
+                        outlier], should_notify=model_settings["should_notify"])
 
     return outlier

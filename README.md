@@ -1,3 +1,4 @@
+
 # ee-outliers
 
 ```
@@ -33,6 +34,7 @@ The possibilities of the type of anomalies you can spot using ee-outliers is vir
 -	Detect malicious authentication events
 -	Detect processes with suspicious outbound connectivity
 -	Detect malicious persistence mechanisms (scheduled tasks, auto-runs, etc.)
+-	Detect fraud is credit cards transactions
 -	…
 
 Checkout the screenshots at the end of this readme for a few examples.
@@ -126,32 +128,52 @@ The different types of detection models that can be configured are listed below.
 
 - **string K-Means**: this model will one hot encode words, and then apply K-Means on these vectors.
 
-- **itemlife models**: the itemlife model will measure the start time, the duration and the end time of an "element", and then apply MAD, STDEV, LOF on it (start hour, start month, start timestamp, duration, end hour, end month). You can also apply outlier detection across aggregators (number of events per aggregation). With this, you can, for example, detect long users sessions, long running processes...
-
+- **duration**: this model measures the duration between two events (and also the start moment and the end moment), and uses this duration as metric for outlier detection. They are two types of outliers detection, within aggregator and across aggregator.
+	- Within aggregator metrics
+		- start_minute
+		- start_hour
+		- start_day
+		- start_month
+		- start_year
+		- start_timestamp
+		- end_minute
+		- end_hour
+		- end_day
+		- end_month
+		- end_year
+		- end_timestamp
+		- duration
+		- log_duration
+	- Across aggregator metrics
+		- number_of_events
+		- events_per_minute
+		- max_duration
+		- min_duration
+		- mean_duration
 
 ### General model parameters
 **es_query_filter**
 
 Each model starts with an Elasticsearch query which selects which events the model should consider for analysis.
 The best way of testing if the query is valid is by copy-pasting it from a working Kibana query.
- 
-**trigger_on**
 
-possible values: ``low``, ``high``. 
-This parameter defines if the outliers model should trigger whenever the calculated model value of the event is lower or higher than the decision boundary. For example, a model that should trigger on users that log into a statistically high number of workstations should trigger on ``high`` values, whereas a model that should detect processes that rarely communicate on the network should trigger on ``low`` values.
-
-**trigger_method** and **trigger_sensitivity**
+**trigger_method**, **trigger_sensitivity** and **n_neighbors**
 
 Possible ``trigger_method`` values:
 
- - ``percentile``: percentile. ``trigger_sensitivity`` ranges from ``0-100``.
- - ``pct_of_max_value``: percentage of maximum value. ``trigger_sensitivity`` ranges from ``0-100``.
- - ``pct_of_median_value``: percentage of median value. ``trigger_sensitivity`` ranges from ``0-100``.
- - ``pct_of_avg_value``: percentage of average value. ``trigger_sensitivity`` ranges from ``0-100``.
- - ``mad``: Median Average Deviation. ``trigger_sensitivity`` defines the total number of deviations and ranges from``0-Inf.``.
- - ``madpos``: same as ``mad`` but the trigger value will always be positive. In case mad is negative, it will result 0.
- - ``stdev``: Standard Deviation. ``trigger_sensitivity`` defines the total number of deviations and ranges from``0-Inf.``.
- - ``float``: fixed value to trigger on. ``trigger_sensitivity`` defines the trigger value.
+- ``mad``: Median Average Deviation. ``trigger_sensitivity`` defines the total number of deviations ``[0-inf]``
+- ``mad_low``: Trigger only on low value
+- ``mad_high``: Trigger only on high value
+- ``z_score``: Similar to MAD. ``trigger_sensitivity`` defines the total number of deviations ``[0-inf]``.
+- ``stdev``: Standard Deviation. ``trigger_sensitivity`` defines the total number of deviations ``[0-inf]``.
+- ``stdev_low``: Trigger only on low value
+- ``stdev_high``: Trigger only on high value
+- ``lof``: Local Outliers Factor. ``trigger_sensitivity`` percantage of outliers in data ``[0-100]``. ``n_neighbors``: Minimal size of a cluster ``[1-inf]``.
+- ``lof_stdev``: Apply STDEV on LOF. ``trigger_sensitivity`` defines the total number of deviations ``[0-inf]``. ``n_neighbors``: Minimal size of a cluster ``[1-inf]``.
+- ``isolation_forest``: Isolation forest. ``trigger_sensitivity`` defines the total number of deviations ``[0-inf]``.
+- ``less_than_sensitivity``: Trigger everything less than ``trigger_sensitivity``.
+- ``pct_of_avg_value_low``: percentage of average value, trigger only on low value. ``trigger_sensitivity`` ranges from ``0-100``.
+- ``pct_of_avg_value_high``: percentage of average value, trigger only on high value. ``trigger_sensitivity`` ranges from ``0-100``.
 
 **outlier_type**
 
@@ -168,17 +190,12 @@ For example: base64 encoded command line arguments
 Freetext field which will be added to the outlier event as new field named ``outliers.summary``.
 For example: base64 encoded command line arguments for process {OsqueryFilter.name}
 
-**run_model**
-
-Switch to enable / disable running of the model
-
-**test_model**
-
-Switch to enable / disable testing of the model
-
 **should_notify**
 
 Switch to enable / disable notifications for the model
+
+**plot_graph**
+Plot outliers and normal data. If we will plot too many graphs, they are saved in ``/shared``.
 
 ## simplequery models
 
@@ -188,9 +205,9 @@ Each metrics model section in the configuration file should be prefixed by ``sim
 
 **Example model**
 ```
-##############################
-# SIMPLEQUERY - POWERSHELL EXECUTION IN HIDDEN WINDOW
-##############################
+#######################################################
+# SIMPLEQUERY - POWERSHELL EXECUTION IN HIDDEN WINDOW #
+#######################################################
 [simplequery_powershell_execution_hidden_window]
 es_query_filter=tags:endpoint AND "powershell.exe" AND (OsqueryFilter.cmdline:"-W hidden" OR OsqueryFilter.cmdline:"-WindowStyle Hidden")
 
@@ -215,26 +232,25 @@ Each metrics model section in the configuration file should be prefixed by ``met
 **Example model**
 
 ```
-##############################
-# METRICS - BASE64 ENCODED COMMAND LINE ARGUMENTS
-##############################
-[metrics_cmdline_containing_url]
-es_query_filter=tags:endpoint AND _exists_:OsqueryFilter.cmdline
+###################################################
+# METRICS - BASE64 ENCODED COMMAND LINE ARGUMENTS #
+###################################################
+[metrics_base64_encoded_cmdline]
+es_query_filter=_exists_:OsqueryFilter.name AND _exists_:OsqueryFilter.cmdline
 
 aggregator=OsqueryFilter.name
 target=OsqueryFilter.cmdline
-metric=url_length
-trigger_on=high
+
+metric=base64_encoded_length
+
 trigger_method=mad
 trigger_sensitivity=3
 
-outlier_reason=cmd line args containing URL
-outlier_summary=cmd line args contains URL for process {OsqueryFilter.name}
-outlier_type=command execution,command & control
+outlier_type=encoded commands
+outlier_reason=base64 encoded command line arguments
+outlier_summary=base64 encoded command line arguments for process {OsqueryFilter.name} - {OsqueryFilter.cmdline}
 
-run_model=1
-test_model=0
-should_notify=0
+batch_size=50000
 ```
 
 **How it works**
@@ -245,14 +261,18 @@ The metrics model looks for outliers based on a calculated metric of a specific 
 - ``entropy``: use the entropy of the field as metric. Example: entropy("houston") => 2.5216406363433186
 - ``hex_encoded_length``: calculate total length of hexadecimal encoded substrings in the target and use this as metric.
 - ``base64_encoded_length``: calculate total length of base64 encoded substrings in the target and use this as metric. Example: base64_encoded_length("houston we have a cHJvYmxlbQ==") => base64_decoded_string: problem, base64_encoded_length: 7
-- ``url_length``: extract all URLs from the target value and use this as metric. Example: url_length("why don't we go http://www.dance.com") => extracted_urls_length: 20, extracted_urls: http://www.dance.com
+- ``regex_len_<regex_here>``: extract the first match and return its length. For example, to extract the URL length, we can write ``regex_len_http(s?):\/\/[a-zA-Z0-9\.\/-]+``. The model will extract the URL from the target value and use its length as metric. Example: ("why don't we go http://www.dance.com") => extracted_urls_length: 20, extracted regex: http://www.dance.com
+- ``regex_count_match_<regex_here>``: count the number of matches and use it as a metric. For example, you can extract the number of URLs in a text ``regex_count_match_http(s?):\/\/[a-zA-Z0-9\.\/-]+``.
+Example: "Do you prefer https://www.newbiecontest.org or https://www.root-me.org" => 2 URLs
+- ``regex_sum_len_``: extract all matches and return the total length.
+Example: ``regex_count_match_http(s?):\/\/[a-zA-Z0-9\.\/-]+``("Do you prefer https://www.newbiecontest.org or https://www.root-me.org") => 52
 
 The metrics model works as following:
 
  1. The model starts by taking into account all the events defined in the ``es_query_filter``
  parameter. This should be a valid Elasticsearch query. The best way of testing if the query is valid is by copy-pasting it from a working Kibana query.
  
- 2. The model then calculates the selected metric (``url_length`` in the example) for each encountered value of the ``target`` field (``OsqueryFilter.cmdline`` in the example). These values are the checked for outliers in buckets defined by the values of the ``aggregator``field (``OsqueryFilter.name`` in the example). Sensitivity for deciding if an event is an outlier is done based on the ``trigger_method`` (MAD or Mean Average Deviation in this case) and the ``trigger_sensitivity`` (in this case 3 standard deviations).
+ 2. The model then calculates the selected metric (``base64_encoded_length`` in the example) for each encountered value of the ``target`` field (``OsqueryFilter.cmdline`` in the example). These values are the checked for outliers in buckets defined by the values of the ``aggregator`` field (``OsqueryFilter.name`` in the example). Sensitivity for deciding if an event is an outlier is done based on the ``trigger_method`` (MAD or Mean Average Deviation in this case) and the ``trigger_sensitivity`` (in this case 3 standard deviations).
 
 3. Outlier events are tagged with a range of new fields, all prefixed with ``outliers.<outlier_field_name>``. 
 
@@ -264,25 +284,24 @@ Each metrics model section in the configuration file should be prefixed by ``ter
 
 **Example model**
 ```
-##############################
-# TERMS - RARE PROCESSES WITH OUTBOUND CONNECTIVITY
-##############################
-[terms_rarely_seen_outbound_connections]
-es_query_filter=tags:endpoint AND meta.command.name:"get_outbound_conns" AND -OsqueryFilter.remote_port.raw:0 AND -OsqueryFilter.remote_address.raw:127.0.0.1 AND -OsqueryFilter.remote_address.raw:"::1"
+##########################
+# TERMS - RARE PROCESSES #
+##########################
+[terms_rare_processes]
+es_query_filter=meta.command.name: "get_all_processes_enriched"
 
 aggregator=OsqueryFilter.name
 target=meta.hostname
+
 target_count_method=across_aggregators
-trigger_on=low
-trigger_method=pct_of_max_value
-trigger_sensitivity=5
+trigger_method=mad_low
+trigger_sensitivity=1
 
-outlier_type=outbound connection
-outlier_reason=rare outbound connection
-outlier_summary=rare outbound connection: {OsqueryFilter.name}
+outlier_type=Rare process
+outlier_reason=Rare process
+outlier_summary=Rare process: {OsqueryFilter.name}
 
-run_model=1
-test_model=0
+batch_size=10000
 ```
 
 **How it works**
@@ -291,11 +310,122 @@ The terms model looks for outliers by calculting rare combinations of a certain 
 
 1. The model starts by taking into account all the events defined in the ``es_query_filter`` parameter. This should be a valid Elasticsearch query. The best way of testing if the query is valid is by copy-pasting it from a working Kibana query.
  
-2. The model will then count all unique instances of the ``target`` field, for each individual ``aggregator``field. In the example above, the ``OsqueryFilter.name`` field represents the process name. The target field ``meta.hostname`` represents the total number of hosts that are observed for that specific aggregator (meaning: how many hosts are observed to be running that process name which is communicating with the outside world?). Events where the communicating process is observed on less than 5 percent of all the observed hosts that contain communicating processes will be flagged as being an outlier.
+2. The model will then count all unique instances of the ``target`` field, for each individual ``aggregator``field. In the example above, the ``OsqueryFilter.name`` field represents the process name. The target field ``meta.hostname`` represents the total number of hosts that are observed for that specific aggregator (meaning: how many hosts are observed to be running that process name which is communicating with the outside world?).
 
 3. Outlier events are tagged with a range of new fields, all prefixed with ``outliers.<outlier_field_name>``. 
 
 The ``target_count_method`` parameter can be used to define if the analysis should be performed across all values of the aggregator at the same time, or for each value of the aggregator separately. 
+
+
+## duration model
+The duration model measures the duration between two events and uses it to detect outliers.
+
+This model can perform within aggregator analysis or across aggregator analysis, depending on the ``target`` parameter.
+
+Here are the possible values for ``target``,
+- Within aggregator metrics
+	- start_minute
+	- start_hour
+	- start_day
+	- start_month
+	- start_year
+	- start_timestamp
+	- end_minute
+	- end_hour
+	- end_day
+	- end_month
+	- end_year
+	- end_timestamp
+	- duration
+	- log_duration
+- Across aggregator metrics
+	- number_of_events
+	- events_per_minute
+	- max_duration
+	- min_duration
+	- mean_duration
+
+**Example model**
+```
+###############################
+# DURATION - Abnormal session #
+###############################
+[duration_abnormal_session_duration]
+es_query_filter=(EventID:4624 OR EventID:4634) AND _exists_:LogonID AND _exists_:LogHost
+
+aggregator=LogonType
+fields_value_to_correlate=LogonID,LogHost
+
+start_end_field=EventID
+# Logon event
+start_value=4624
+# Logoff event
+end_value=4634
+
+outlier_reason=Strange session duration
+outlier_type=Strange session duration
+outlier_summary={LogonType} - {UserName} - Session duration: <target>
+
+batch_eval_size=20000
+
+target=log_duration
+
+trigger_method=lof_stdev
+trigger_sensitivity=2
+```
+
+**How it works**
+The parameter ``fields_value_to_correlate`` can be used to determine which ``start event`` corresponds to which ``end event``. Here we use the session ID and host name.
+
+The parameter ``start_end_field`` specifies the field to be used to identify whether the event is a ``start event`` or an ``end event`` (with ``start_value`` and ``end_value``).
+
+The ``target`` parameter defines the value to be extracted (``duration``, ``start_hour``,....).
+It will also define whether the analysis is done within the aggregator or at the aggregator level.
+
+## autoencoder
+Autoencoder is a type of neural network which reconstructs the input.
+
+We use the reconstruction error as a score to detect outliers (outlier will have a bigger reconstruction score).
+
+Actually, this model works only with numeric fields !
+
+![autoencoder_image](https://cdn-images-1.medium.com/max/1600/1*iDcAplzGhttLcYI56MIMxQ.png)
+
+**Example model**
+```
+############################################
+# AUTOENCODER - Credicards fraud detection #
+############################################
+[autoencoder]
+
+fields=V1,V2,V3,V4,V5,V6,V7,V8,V9,V10,V11,V12,V13,V14,V15,V16,V17,V18,V19,V20,V21,V22,V23,V24,V25,V26,V27,V28
+
+# Show these fields if the item is an anomaly
+output_fields=Class,Amount
+number_of_elements_displayed=30 
+
+outlier_reason=Fraud
+outlier_type=Fraud
+outlier_summary=This transaction seems to be a fraud... Pay attention !
+
+# Network configuration
+layers=28,50,10,50,28
+epochs=2
+
+# To test the model, if the data is labelised (1: Outlier, 0: Normal)
+test_the_model=1
+test_label=Class
+number_of_points_plotted=1000
+```
+
+**How it works**
+The ``fields`` parameter defines which fields we have to put in the input of the neural network.
+
+The ``output_fields`` define which fields we will show if the document is abnormal.
+
+You can change the configuration of the neural network with the parameter ``layers``, and also the number of epochs for training with the parameter ``epochs``.
+
+If ``test_the_model`` is set to 1, that means that we have a label, we know which item is an outlier, and so we want to test our model. The ``test_label`` parameter defines which field is the label (1 for outlier, 0 for normal), and you can choose how many points you want in your graph with ``number_of_points_plotted``.
 
 ## Whitelisting
 
@@ -406,6 +536,3 @@ You can reach out to the developers of ee-outliers by creating an issue in githu
 For any other communication, you can reach out by sending us an e-mail at research@nviso.be.
 
 Thank you for using ee-outliers and we look forward to your feedback! 🐀
-
-
-
