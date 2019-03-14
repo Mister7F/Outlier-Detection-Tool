@@ -3,6 +3,7 @@ import numpy as np
 import configparser
 
 import helpers.utils
+from helpers import plotter
 from collections import Counter
 from collections import defaultdict
 from helpers.outlier import Outlier
@@ -16,16 +17,16 @@ def perform_analysis():
             model_settings = extract_model_settings(name)
 
             if model_settings["target_count_method"] == "across_aggregators":
-                perform_analysis_across_aggregators(model_settings)
+                perform_analysis_across_aggregators(model_settings, name)
 
             elif model_settings["target_count_method"] == "within_aggregator":
-                perform_analysis_within_aggregator(model_settings)
+                perform_analysis_within_aggregator(model_settings, name)
 
             else:
                 raise Exception('Wrong target_count_method')
 
 
-def perform_analysis_within_aggregator(model_settings):
+def perform_analysis_within_aggregator(model_settings, section_name):
     aggregations = []
     all_targets = {}
     all_counts = {}
@@ -105,12 +106,40 @@ def perform_analysis_within_aggregator(model_settings):
             del batch_targets
             del batch_counts
 
+        # Plot graph
+        if model_settings["plot_graph"]:
+            agg = aggregation
+            std = np.array(all_counts[agg]).std()
+            if len(all_outliers[agg]):
+                plotter.bar(
+                    data=[np.delete(all_counts[agg], all_outliers[agg]), np.array(all_counts[agg])[all_outliers[agg]]],
+                    names=[np.delete(all_targets[agg], all_outliers[agg]), np.array(all_targets[agg])[all_outliers[agg]]],
+                    labels=['Data', 'Outliers'],
+                    xlabel='Count - ' + model_settings["trigger_method"],
+                    ylabel=model_settings["target"],
+                    filename='/plots/terms_%s/*%s_%f_.svg' % (model_settings["target"], agg, std),
+                    scale='log',
+                    title='Count of %s for %s' % (model_settings["target"].split('.')[-1], agg)
+                )
+
+            else:
+                plotter.bar(
+                    data=[np.array(all_counts[agg])],
+                    names=[np.array(all_targets[agg])],
+                    labels=['Data'],
+                    xlabel='Count - ' + model_settings["trigger_method"],
+                    ylabel=model_settings["target"],
+                    filename='/plots/terms_%s/%s_%f_.svg' % (model_settings["target"], agg, std),
+                    scale='log',
+                    title='Count of %s for %s' % (model_settings["target"].split('.')[-1], agg[:10])
+                )
+
     logging.logger.info('Number of aggregations: %i' % len(aggregations))
     logging.logger.info('Number of outliers: %i' % sum(
         [len(all_outliers[a]) for a in all_outliers]))
 
 
-def perform_analysis_across_aggregators(model_settings):
+def perform_analysis_across_aggregators(model_settings, section_name):
     lucene_query = es.filter_by_query_string(model_settings["es_query_filter"])
 
     target = model_settings["target"]
@@ -154,6 +183,35 @@ def perform_analysis_across_aggregators(model_settings):
         model_settings["n_neighbors"],
         model_settings["trigger_on"]
     )
+
+    if model_settings["plot_graph"]:
+        std = aggregations_target.std()
+        if len(outliers):
+            plotter.histogram(
+                [np.delete(aggregations_target, outliers), aggregations_target[outliers]],
+                labels=['Data', 'Outliers'],
+                title=aggregator + ' - Histogram',
+                xlabel='Unique count of ' + model_settings["target"] + ' - ' + model_settings["trigger_method"],
+                ylabel='Count [log]',
+                bins=50,
+                log=True,
+                filename='/plots/%s/*%s_%f_.svg'
+                         % (section_name, str(model_settings["target"]), std),
+                show=False,
+            )
+        else:
+            plotter.histogram(
+                [np.delete(aggregations_target, outliers), aggregations_target[outliers]],
+                labels=['Data', 'Outliers'],
+                title='Outliers - Histogram',
+                xlabel='Unique count of ' + model_settings["target"] + ' - ' + model_settings["trigger_method"],
+                ylabel='Count [log]',
+                bins=50,
+                log=True,
+                filename='/plots/%s/%s_%f_.svg'
+                         % (section_name, str(model_settings["target"]), std),
+                show=False,
+            )
 
     for outlier in outliers:
         agg = aggregations[outlier]

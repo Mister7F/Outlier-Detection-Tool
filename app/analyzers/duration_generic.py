@@ -10,7 +10,7 @@ from helpers.outlier import Outlier
 from helpers.singletons import settings, es, logging
 from helpers.text_processing import class_to_id
 from helpers.outliers_detection import outliers_detection
-from helpers.plotter import *
+from helpers import plotter
 
 
 def perform_analysis():
@@ -32,12 +32,12 @@ def perform_analysis():
         ]
 
         if model_settings['target'] in across_aggregator_target:
-            perform_analysis_across_aggregators(model_settings)
+            perform_analysis_across_aggregators(model_settings, section_name)
         else:
-            perform_analysis_with_in_aggregator(model_settings)
+            perform_analysis_with_in_aggregator(model_settings, section_name)
 
 
-def perform_analysis_across_aggregators(model_settings):
+def perform_analysis_across_aggregators(model_settings, section_name):
     lucene_query = es.filter_by_query_string(model_settings["es_query_filter"])
 
     total_documents = es.count_documents(lucene_query=lucene_query)
@@ -96,6 +96,35 @@ def perform_analysis_across_aggregators(model_settings):
             yscale='log'
         )
 
+    if model_settings["plot_graph"]:
+        std = aggregations_target.std()
+        if len(outliers):
+            plotter.histogram(
+                [np.delete(aggregations_target, outliers), aggregations_target[outliers]],
+                labels=['Data', 'Outliers'],
+                title='Outliers - Histogram',
+                xlabel=model_settings["target"] + ' - ' + model_settings["trigger_method"],
+                ylabel='Count [log]',
+                bins=20,
+                log=True,
+                filename='/plots/%s/*across_agg_%f_.svg'
+                         % (section_name, std),
+                show=False,
+            )
+        else:
+            plotter.histogram(
+                [aggregations_target],
+                labels=['Data'],
+                title='Outliers - Histogram',
+                xlabel=model_settings["target"] + ' - ' + model_settings["trigger_method"],
+                ylabel='Count [log]',
+                bins=20,
+                log=True,
+                filename='/plots/%s/across_agg__%f_.svg'
+                         % (section_name, std),
+                show=False,
+            )
+
     for outlier in outliers:
         agg = aggregations[outlier]
         # Process only the first doc of the aggregation,
@@ -107,7 +136,7 @@ def perform_analysis_across_aggregators(model_settings):
         )
 
 
-def perform_analysis_with_in_aggregator(model_settings):
+def perform_analysis_with_in_aggregator(model_settings, section_name):
     lucene_query = es.filter_by_query_string(model_settings["es_query_filter"])
 
     total_documents = es.count_documents(lucene_query=lucene_query)
@@ -174,29 +203,49 @@ def perform_analysis_with_in_aggregator(model_settings):
                 for a in agg_outliers
             ])
 
-            # Freevalue_iteration the memory
+            if model_settings["plot_graph"] and len(all_targets[aggregation]):
+                batch_targets = np.array(batch_targets)
+                std = batch_targets.std()
+                if len(agg_outliers):
+                    plotter.histogram(
+                        [np.delete(batch_targets, agg_outliers), batch_targets[agg_outliers]],
+                        labels=['Data', 'Outliers'],
+                        title=str(model_settings['aggregator']) + ' = ' + str(aggregation) + ' - Outliers Histogram',
+                        xlabel=model_settings["target"] + ' - ' + model_settings["trigger_method"],
+                        ylabel='Count [log]',
+                        bins=20,
+                        log=True,
+                        filename='/plots/%s/*%s[%i]_%f_.svg'
+                                 % (section_name, aggregation, i_batch, std),
+                        show=False,
+                    )
+                else:
+                    plotter.histogram(
+                        [batch_targets],
+                        labels=['Data'],
+                        title=str(model_settings['aggregator']) + ' = ' + str(aggregation) + ' - Outliers Histogram',
+                        xlabel=model_settings["target"] + ' - ' + model_settings["trigger_method"],
+                        ylabel='Count [log]',
+                        bins=20,
+                        log=True,
+                        filename='/plots/%s/%s[%i]_%f_.svg'
+                                 % (section_name, aggregation, i_batch, std),
+                        show=False,
+                    )
+
+                # Save the array
+                # Useful to debug...
+                np.save('/plots/%s/%s[%i]' % (section_name, aggregation, i_batch), batch_targets)
+
+            # Free the memory
             del batch_docs
             del batch_targets
             # Garbage collector
             gc.collect()
 
-            # Todo: remove this !!!
-            for _ in documents:
-                pass
-
     logging.logger.info('Number of aggregations: %i\t:\t' % len(aggregations))
     logging.logger.info('Number of elements: %i' %
                         sum([len(all_targets[t]) for t in all_targets]))
-
-    if model_settings["plot_graph"]:
-        histogram_outliers_agg(
-            all_targets,
-            all_outliers,
-            agg_title=model_settings["aggregator"],
-            xlabel=model_settings["target"],
-            bins=40,
-            yscale='linear'
-        )
 
 
 def get_target_extractor(target):

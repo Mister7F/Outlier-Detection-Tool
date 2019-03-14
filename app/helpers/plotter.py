@@ -3,6 +3,95 @@ import math
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+import seaborn as sns
+
+
+sns.set(color_codes=True)
+sns.set(style="whitegrid")
+
+
+def histogram(data, labels, xlabel='Value', ylabel='Count', bins=40,
+              log=True, show=False, filename=None, title='Histogram'):
+    fig = plt.figure()
+
+    xlabel = ' '.join(xlabel.split('_'))
+    xlabel = xlabel[0].upper() + xlabel[1:]
+
+    binwidth = (max([d.max() for d in data]) - min([d.min() for d in data])) / bins
+
+    if math.isclose(binwidth, 0):
+        binwidth = 1
+
+    for points, label, color in zip(data, labels, ['b', 'r']):
+        bins = int((points.max() - points.min())/binwidth)+1
+        sns.distplot(points, color=color, label=label, bins=bins, kde=False, hist_kws=dict(alpha=1))
+
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    if log:
+        plt.yscale('log')
+
+    plt.legend()
+
+    if show:
+        plt.show()
+
+    if filename is not None:
+        if not os.path.exists(os.path.split(filename)[0]):
+            os.mkdir(os.path.split(filename)[0])
+        plt.savefig(filename)
+
+    plt.cla()
+    plt.clf()
+
+
+def bar(data, names, labels, xlabel='Count',
+        ylabel='Label', scale='log', title='Bar',
+        max_label_len=10, filename=None, show=False):
+
+    fig, ax = plt.subplots()
+
+    y_pos = np.arange(sum([d.shape[0] for d in data]))
+    pos = 0
+
+    for color, points, label in zip(['b', 'r'], data, labels):
+        ax.barh(
+            y_pos[pos:pos+len(points)],
+            points,
+            align='center',
+            label=label
+        )
+        pos += len(points)
+
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels([n[:max_label_len] for name in names for n in name])
+    ax.invert_yaxis()
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_xscale(scale)
+    ax.set_xlim(0.5)
+    ax.set_title(title)
+
+    plt.subplots_adjust(left=0.3, right=0.8, top=0.8, bottom=0.2)
+
+    plt.legend()
+
+    if show:
+        plt.show()
+
+    if filename is not None:
+        if not os.path.exists(os.path.split(filename)[0]):
+            os.mkdir(os.path.split(filename)[0])
+        plt.savefig(filename)
+
+    plt.cla()
+    plt.clf()
+
+#######
+# OLD #
+#######
 
 
 def histogram_outliers(data, outliers=[], xlabel='Value', bins=10,
@@ -118,11 +207,7 @@ def histogram_outliers_agg(agg_data, agg_outliers, one_plot_per_agg=True,
 
 
 def bar_outliers(values, labels, outliers, xlabel='', ylabel='',
-                 title='', filename=None, show=True, xscale='log'):
-
-    if len(labels) < 2:
-        # Plotting one column has no sense...
-        return
+                 title='', filename=None, show=True, scale='log'):
 
     plt.rcdefaults()
     fig, ax = plt.subplots()
@@ -132,17 +217,13 @@ def bar_outliers(values, labels, outliers, xlabel='', ylabel='',
     ax.barh(
         np.delete(y_pos, outliers),
         np.delete(values, outliers),
-        align='center',
-        color='darkblue',
-        ecolor='black'
+        align='center'
     )
 
     ax.barh(
         y_pos[outliers],
         values[outliers],
-        align='center',
-        color='red',
-        ecolor='black'
+        align='center'
     )
 
     ax.set_yticks(y_pos)
@@ -150,7 +231,7 @@ def bar_outliers(values, labels, outliers, xlabel='', ylabel='',
     ax.invert_yaxis()  # labels read top-to-bottom
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    ax.set_xscale(xscale)
+    ax.set_xscale(scale)
     ax.set_xlim(0.1)
     ax.set_title(title)
 

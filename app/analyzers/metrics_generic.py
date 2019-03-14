@@ -1,6 +1,7 @@
 import re
 import numpy as np
 import helpers.utils
+from helpers import plotter
 from collections import defaultdict
 from helpers.outlier import Outlier
 from configparser import NoOptionError
@@ -24,6 +25,7 @@ def perform_analysis():
 
                 # For all batch
                 read_batch = True
+                i_batch = 0
                 while read_batch:
 
                     metrics = []
@@ -35,7 +37,7 @@ def perform_analysis():
                             model_settings["target"]
                         )
 
-                        metric = extract_metrics(target, model_settings['metric'])
+                        metric = extract_metrics(target, model_settings)
 
                         if metric is None:
                             continue
@@ -69,8 +71,41 @@ def perform_analysis():
                             model_settings
                         )
 
+                    if model_settings["plot_graph"]:
+                        std = metrics.std()
+                        if len(outliers):
+                            plotter.histogram(
+                                [np.delete(metrics, outliers), metrics[outliers]],
+                                labels=['Data', 'Outliers'],
+                                title='Outliers - Histogram',
+                                xlabel=model_settings['metric'] + ' for ' + aggregation,
+                                ylabel='Count [log]',
+                                bins=20,
+                                log=True,
+                                filename='/plots/%s/*%s[batch %i]_%f_.svg'
+                                         % (section_name, aggregation, i_batch, std),
+                                show=False,
+                            )
+                        else:
+                            plotter.histogram(
+                                [metrics],
+                                labels=['Data'],
+                                title='Outliers - Histogram',
+                                xlabel=model_settings['metric'] + ' for ' + aggregation,
+                                ylabel='Count [log]',
+                                bins=20,
+                                log=True,
+                                filename='/plots/%s/%s[batch %i]_%f_.svg'
+                                         % (section_name, aggregation, i_batch, std),
+                                show=False,
+                            )
 
-def extract_metrics(target, metric):
+                    i_batch += 1
+
+
+def extract_metrics(target, model_settings):
+
+    metric = model_settings['metric']
 
     if metric == 'numerical_value':
         try:
@@ -84,17 +119,17 @@ def extract_metrics(target, metric):
     elif metric == 'entropy':
         target = helpers.utils.shannon_entropy(target)
 
-    elif metric.startswith('regex_len_'):
-        regex = metric[10:]
-        target = re.search(regex, target)
-        target = len(target.group()) if target else 0
+    elif metric == 'regex_len':
+        regex = model_settings['regex']
+        target = re.findall(regex, target)
+        target = max([len(i) for i in target]) if target else 0
 
-    elif metric.startswith('regex_count_match_'):
-        regex = metric[18:]
+    elif metric == 'regex_count_match':
+        regex = model_settings['regex']
         target = len(re.findall(regex, target))
 
-    elif metric.startswith('regex_sum_len_'):
-        regex = metric[14:]
+    elif metric == 'regex_sum_len':
+        regex = model_settings['regex']
         target = sum(
             len(i)
             for i in re.findall(regex, target)
@@ -150,6 +185,13 @@ def extract_model_settings(section_name):
         model_settings["trigger_on"] = settings.config.get(section_name, "trigger_on")
     except Exception:
         model_settings["trigger_on"] = None
+
+    try:
+        model_settings["regex"] = settings.config.get(section_name, "regex")
+    except Exception:
+        if model_settings["trigger_method"].startswith('regex'):
+            raise Exception('Regex parameter is missing')
+        model_settings["regex"] = None
 
     model_settings["outlier_reason"] = settings.config.get(
         section_name, "outlier_reason")

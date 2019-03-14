@@ -33,8 +33,9 @@ USER root
 ADD ./requirements.txt /app/requirements.txt
 RUN sudo pip3 install -r /app/requirements.txt
 
-ADD ./defaults /defaults
-ADD ./app/ /app
+# Todo: add this
+#ADD ./defaults /defaults
+#ADD ./app/ /app
 
 WORKDIR /app
 ENTRYPOINT ["/app/entrypoint.sh"]
