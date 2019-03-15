@@ -134,6 +134,8 @@ def perform_analysis_within_aggregator(model_settings, section_name):
                     title='Count of %s for %s' % (model_settings["target"].split('.')[-1], agg[:10])
                 )
 
+            logging.logger.info('Plots are in: /plots/terms_%s/*%s_%f_.svg' % (model_settings["target"], agg, std))
+
     logging.logger.info('Number of aggregations: %i' % len(aggregations))
     logging.logger.info('Number of outliers: %i' % sum(
         [len(all_outliers[a]) for a in all_outliers]))
@@ -227,7 +229,6 @@ def perform_analysis_across_aggregators(model_settings, section_name):
 
 def extract_model_settings(section_name):
     model_settings = dict()
-    model_settings["plot_graph"] = settings.config.getint("general", "plot_graph")
     model_settings["es_query_filter"] = settings.config.get(section_name, "es_query_filter")
     model_settings["target"] = settings.config.get(section_name, "target")
     model_settings["aggregator"] = settings.config.get(section_name, "aggregator")
@@ -250,6 +251,11 @@ def extract_model_settings(section_name):
         model_settings["should_notify"] = settings.config.getboolean("notifier", "email_notifier") and settings.config.getboolean(section_name, "should_notify")
     except configparser.NoOptionError:
         model_settings["should_notify"] = False
+
+    try:
+        model_settings["plot_graph"] = settings.config.getint(section_name, "plot_graph")
+    except configparser.NoOptionError:
+        model_settings["plot_graph"] = 0
 
     try:
         model_settings["n_neighbors"] = settings.config.getint(section_name, "n_neighbors")

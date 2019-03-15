@@ -1,7 +1,7 @@
 import os
 import math
 import numpy as np
-import matplotlib
+import matplotlib; matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 

@@ -22,7 +22,8 @@ def perform_analysis():
                 model_settings["aggregator"],
                 model_settings['es_query_filter']
             ):
-
+                agg_tragets = []
+                agg_outliers = []
                 # For all batch
                 read_batch = True
                 i_batch = 0
@@ -71,36 +72,45 @@ def perform_analysis():
                             model_settings
                         )
 
-                    if model_settings["plot_graph"]:
-                        std = metrics.std()
-                        if len(outliers):
-                            plotter.histogram(
-                                [np.delete(metrics, outliers), metrics[outliers]],
-                                labels=['Data', 'Outliers'],
-                                title='Outliers - Histogram',
-                                xlabel=model_settings['metric'] + ' for ' + aggregation,
-                                ylabel='Count [log]',
-                                bins=20,
-                                log=True,
-                                filename='/plots/%s/*%s[batch %i]_%f_.svg'
-                                         % (section_name, aggregation, i_batch, std),
-                                show=False,
-                            )
-                        else:
-                            plotter.histogram(
-                                [metrics],
-                                labels=['Data'],
-                                title='Outliers - Histogram',
-                                xlabel=model_settings['metric'] + ' for ' + aggregation,
-                                ylabel='Count [log]',
-                                bins=20,
-                                log=True,
-                                filename='/plots/%s/%s[batch %i]_%f_.svg'
-                                         % (section_name, aggregation, i_batch, std),
-                                show=False,
-                            )
+                    agg_outliers.extend(outliers + len(agg_tragets))
+                    agg_tragets.extend(metrics)
 
                     i_batch += 1
+
+                    del docs
+                    del metrics
+                    del outliers
+
+                if model_settings["plot_graph"]:
+                    agg_outliers = np.array(agg_outliers)
+                    agg_tragets = np.array(agg_tragets)
+                    std = agg_tragets.std()
+                    if len(agg_outliers):
+                        plotter.histogram(
+                            [np.delete(agg_tragets, agg_outliers), agg_tragets[agg_outliers]],
+                            labels=['Data', 'Outliers'],
+                            title='Outliers - Histogram',
+                            xlabel=model_settings['metric'] + ' for ' + aggregation,
+                            ylabel='Count [log]',
+                            bins=20,
+                            log=True,
+                            filename='/plots/%s/*%s_%f_.svg'
+                                     % (section_name, aggregation, std),
+                            show=False,
+                        )
+                    else:
+                        plotter.histogram(
+                            [agg_tragets],
+                            labels=['Data'],
+                            title='Outliers - Histogram',
+                            xlabel=model_settings['metric'] + ' for ' + aggregation,
+                            ylabel='Count [log]',
+                            bins=20,
+                            log=True,
+                            filename='/plots/%s/%s_%f_.svg'
+                                     % (section_name, aggregation, std),
+                            show=False,
+                        )
 
 
 def extract_metrics(target, model_settings):
@@ -166,8 +176,6 @@ def extract_metrics(target, model_settings):
 
 def extract_model_settings(section_name):
     model_settings = dict()
-    model_settings["plot_graph"] = settings.config.getint(
-        "general", "plot_graph")
     model_settings["es_query_filter"] = settings.config.get(
         section_name, "es_query_filter")
     model_settings["target"] = settings.config.get(section_name, "target")
@@ -215,6 +223,11 @@ def extract_model_settings(section_name):
             section_name, "should_notify")
     except NoOptionError:
         model_settings["should_notify"] = False
+
+    try:
+        model_settings["plot_graph"] = settings.config.getint(section_name, "plot_graph")
+    except configparser.NoOptionError:
+        model_settings["plot_graph"] = 0
 
     return model_settings
 
