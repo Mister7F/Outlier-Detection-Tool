@@ -69,9 +69,6 @@ Running ee-outliers in interactive mode:
 # Build the image
 docker build -t "outliers-dev" .
 
-# Allow docker to spawn GUI windows
-xhost +local:docker
-
 # Run the image
 docker run --network="host" -v "$PWD/defaults:/mappedvolumes/config" -v "$PWD/shared:/shared" -v "$PWD/plots:/plots" -v "$PWD/defaults:/defaults" -v "$PWD/app:/app" -i  outliers-dev:latest python3 outliers.py interactive --config /mappedvolumes/config/outliers.conf
 ```
@@ -525,6 +522,11 @@ docker run -v "$PWD/defaults:/mappedvolumes/config" -i outliers-dev:latest flake
 <img alt="Detected outlier events are enriched with new fields in Elasticsearch" src="https://forever.daanraman.com/screenshots/Enriched%20outlier%20event%202.png?raw=true" width="650"/><br/>
 <i>Detected outlier events are enriched with new fields in Elasticsearch</i>
 </p>
+
+# Run PHP Server
+```
+docker run --network="host" -v "$PWD/defaults:/mappedvolumes/config-v "$PWD/shared:/shared" -v "$PWD/plots:/plots" -v "$PWD/defaults:/defaults" -v "$PWD/app:/app" -i  outliers-dev:latest python3 -c 'import os; os.system("cd /plots && php -S 0.0.0.0:8000")'
+```
 
 ## License
 

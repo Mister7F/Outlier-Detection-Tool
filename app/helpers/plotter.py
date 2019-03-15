@@ -19,6 +19,9 @@ def histogram(data, labels, xlabel='Value', ylabel='Count', bins=40,
 
     binwidth = (max([d.max() for d in data]) - min([d.min() for d in data])) / bins
 
+    if all([d.std() < 0.00001 for d in data]):
+        plt.ylim(0.7)
+
     if math.isclose(binwidth, 0):
         binwidth = 1
 
