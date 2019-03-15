@@ -1,0 +1,28 @@
+reader:
+    type: ES
+    url: 'http://127.0.0.1:9200'
+    scroll_size: 10000
+    timeout: 90s
+models:
+    -   name: Rare processes
+        sql_query: >
+            SELECT OsqueryFilter.name as child_name,
+                   OsqueryFilter.parentname as process_name,
+                   COUNT(*) as count
+            FROM nviso_events
+            WHERE OsqueryFilter.pid IS NOT NULL
+            GROUP BY OsqueryFilter.name, OsqueryFilter.parentname
+            ORDER BY OsqueryFilter.parentname
+        bucket: [process_name]
+        metrics: [str, str, int]
+        targets: [count]
+        batch_size: 10000
+        detection:
+            method: stdev_low
+            sensitivity: 10
+        outlier_message:
+            title: This child is rare
+            content: 'Process name: {process_name} - Child: {child_name} - Count: {count}'
+        plotting:
+            enable: True
+            output: plots

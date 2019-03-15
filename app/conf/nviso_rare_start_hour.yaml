@@ -1,0 +1,26 @@
+reader:
+    type: ES
+    url: 'http://127.0.0.1:9200'
+    scroll_size: 10000
+    timeout: 90s
+models:
+    -   name: Rare start hour
+        sql_query: >
+            SELECT meta.hostname AS hostname,
+                   MIN(timestamp) AS start
+            FROM nviso_events
+            GROUP BY meta.hostname, meta.logged_in_users_details.time
+        bucket: []
+        metrics: [str, hour]
+        targets: [start]
+        batch_size: 10000
+        detection:
+            method: lof
+            sensitivity: 3
+            n_neighbors: 100
+        outlier_message:
+            title: Strange start hour
+            content: 'Hostname: {hostname} - Start hour: {start}'
+        plotting:
+            enable: True
+            output: plots

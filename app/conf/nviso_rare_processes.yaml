@@ -1,0 +1,25 @@
+reader:
+    type: ES
+    url: 'http://127.0.0.1:9200'
+    scroll_size: 10000
+    timeout: 90s
+models:
+    -   name: Rare processes
+        sql_query: >
+            SELECT COUNT(DISTINCT meta.hostname) as n_hosts, OsqueryFilter.name as process_name            
+            FROM nviso_events
+            WHERE OsqueryFilter.pid IS NOT NULL
+            GROUP BY OsqueryFilter.name
+        bucket: []
+        metrics: [int, str]
+        targets: [n_hosts]
+        batch_size: 10000
+        detection:
+            method: less_than_sensitivity
+            sensitivity: 2
+        outlier_message:
+            title: This process is rare
+            content: 'Process name: {process_name} - Present in: {n_hosts} host(s)'
+        plotting:
+            enable: True
+            output: plots
