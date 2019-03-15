@@ -7,7 +7,7 @@ models:
     -   name: Rare processes
         sql_query: >
             SELECT COUNT(DISTINCT meta.hostname) as n_hosts, OsqueryFilter.name as process_name            
-            FROM nviso_events
+            FROM nviso_events_osquery
             WHERE OsqueryFilter.pid IS NOT NULL
             GROUP BY OsqueryFilter.name
         bucket: []

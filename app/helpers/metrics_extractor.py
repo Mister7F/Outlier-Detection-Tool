@@ -46,7 +46,7 @@ def _b64_decoded(value):
     return base64.b64decode(encoded) if encoded else None
 
 
-def _base64_encoded_len(value):
+def _b64_encoded_len(value):
     encoded = _b64_encoded(value)
 
     return len(encoded) if encoded else 0

@@ -1,0 +1,94 @@
+@font-face {
+	font-family: 'OpenSans';
+	src: url(fonts/OpenSans-Regular.ttf);
+}
+
+html{
+	--color-1: RGB(35, 35, 35);
+	--color-2: RGB(240, 240, 240);
+	font-family: 'OpenSans';
+	font-size: 16px;
+}
+
+h1{
+	font-size: 30px;
+}
+
+body{
+	padding: 20px;
+	color: var(--color-1);
+	background-color: var(--color-2);
+	text-align: center;
+}
+
+.use_cases{
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	justify-content: space-around;
+	align-items: center;
+	border: 1px solid var(--color-1);
+	padding: 10px;
+	height: calc(100vh - 170px);
+	overflow-y: auto;
+	box-sizing: border-box;
+}
+
+.use_cases > div{
+	display: block;
+	border: 1px solid var(--color-1);
+	padding: 10px;
+	box-shadow: 2px 2px 12px #aaa;
+	cursor: pointer;
+	border-radius: 2px;
+}
+
+.plots{
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	justify-content: space-around;
+	align-items: center;
+	border: 1px solid var(--color-1);
+	padding: 10px;
+	width: 80%;
+	height: calc(100vh - 170px);
+	overflow-y: auto;
+	margin: auto;
+	box-sizing: border-box;
+}
+
+.plots img{
+	display: block;
+	width: 450px;
+}
+.plots img[hide]{
+	display: none;
+}
+
+.menu{
+	width: 80%;
+	margin: auto;
+	box-sizing: border-box;
+	border: 1px solid var(--color-1);
+	margin-bottom: 15px;
+}
+
+.menu > a{
+	margin-top: 40px;
+	float: left;
+	left: 20px;
+	margin-right: -100px;
+}
+
+.checkbox > *{
+	margin-bottom: 10px;
+}
+
+.checkbox{
+	margin-top: 25px;
+	float: right;
+	height: 0;
+	width: 200px;
+	margin-left: -200px;
+}

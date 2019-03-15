@@ -9,7 +9,7 @@ models:
             SELECT OsqueryFilter.name as child_name,
                    OsqueryFilter.parentname as process_name,
                    COUNT(*) as count
-            FROM nviso_events
+            FROM nviso_events_osquery
             WHERE OsqueryFilter.pid IS NOT NULL
             GROUP BY OsqueryFilter.name, OsqueryFilter.parentname
             ORDER BY OsqueryFilter.parentname
