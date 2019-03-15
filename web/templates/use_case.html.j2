@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset='utf-8'/>
+        <title>Accueil</title>        
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+        <link rel='stylesheet' href='/static/index.css'>
+        <script src='/static/use_case.js'></script>
+    </head>
+
+    <body>
+        <div class='menu'>
+            <div class='checkbox'>
+                <div><div class="switch">
+                    <label><input type="checkbox" onchange='update_img()' id='hide_no_out'><span class="lever"></span>Hide if no outlier</label>
+                </div></div>
+                <div><div class="switch">
+                    <label><input type="checkbox" onchange='update_img()' id='hide_null_std'><span class="lever"></span>Hide if std is null</label>
+                </div></div>
+            </div>
+            <a class="waves-effect waves-light btn-small" href='/'>Go back</a>
+            <h1>{{use_case}}</h1>
+        </div>
+        
+        <div class='plots'>
+        	{% for img in imgs %}
+                <img src='/imgs/{{use_case}}/{{img[0]}}' outlier='{{img[1]}}' null_std='{{img[2]}}'/>
+        	{% endfor %}
+        </div>
+    </body>
+</html>
