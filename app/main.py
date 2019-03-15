@@ -11,7 +11,7 @@ from analyzers import sql_analyzer
 
 def main():
     args = arg_parse()
-    settings = load_settings('./conf/' + args['config'])
+    settings = load_settings('../conf/' + args['config'])
 
     reader = load_reader(settings['reader'])
 
