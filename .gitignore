@@ -1,3 +1,4 @@
+./plots/*
 .idea
 virtualenv
 venv
