@@ -1,0 +1,28 @@
+reader:
+    type: ES
+    url: 'http://127.0.0.1:9200'
+    scroll_size: 10000
+    timeout: 90s
+models:
+    -   name: Host - Rare parent process
+        sql_query: >
+            SELECT COUNT(*) AS occurs,
+                   ProcessName AS process_name,
+                   ParentProcessName AS parent_name
+            FROM host_events
+            WHERE ProcessName IS NOT NULL
+            GROUP BY ProcessName, ParentProcessName
+        bucket: [process_name]
+        metrics: [int, str, str]
+        targets: [occurs]
+        batch_size: 10000
+        detection:
+            method: stdev
+            trigger_on: low
+            sensitivity: 1
+        outlier_message:
+            title: Rare parent
+            content: 'ProcessName: {process_name} - ProcessName: {parent_name} - N: {occurs}'
+        plotting:
+            enable: True
+            output: plots

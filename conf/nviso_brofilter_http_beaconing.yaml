@@ -1,0 +1,29 @@
+reader:
+    type: ES
+    url: 'http://127.0.0.1:9200'
+    scroll_size: 10000
+    timeout: 90s
+models:
+    -   name: NVISO - HTTP Beaconing
+        sql_query: >
+            SELECT BroFilter.id_orig_h as origin,
+                   BroFilter.server_name as destination,
+                   MINUTE_OF_DAY(timestamp) * 60 + SECOND_OF_MINUTE(timestamp) AS time,
+                   0 AS elapsed_time
+            FROM nviso_brofilter
+            ORDER BY BroFilter.id_orig_h, BroFilter.server_name, timestamp
+        bucket: [origin, destination]
+        metrics: [str, str, int, 'python_eval(row[2] - prev_row[2] if prev_row else None)']
+        targets: [elapsed_time]
+        batch_size: 10000
+        detection:
+            method: lof_stdev
+            n_neighbors: 500
+            trigger_on: high
+            sensitivity: -0.1
+        outlier_message:
+            title: This connection sends data with a current interval
+            content: 'Process name: {origin} - Child: {destination} - Elapsed time: {elapsed_time}'
+        plotting:
+            enable: True
+            output: plots

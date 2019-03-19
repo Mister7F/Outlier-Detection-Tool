@@ -1,0 +1,27 @@
+reader:
+    type: ES
+    url: 'http://127.0.0.1:9200'
+    scroll_size: 10000
+    timeout: 90s
+models:
+    -   name: NVISO - Strange session duration
+        sql_query: >
+            SELECT meta.hostname AS hostname,
+                   MIN(timestamp) AS start,
+                   MAX(timestamp) AS duration
+            FROM nviso_events
+            GROUP BY meta.hostname, meta.logged_in_users_details.time
+        bucket: []
+        metrics: [str, int, 'python_eval(row[2] - row[1])']
+        targets: [duration]
+        batch_size: 10000
+        detection:
+            method: lof
+            sensitivity: 3
+            n_neighbors: 100
+        outlier_message:
+            title: Strange session duration
+            content: 'Hostname: {hostname} - Duration: {duration}'
+        plotting:
+            enable: True
+            output: plots
