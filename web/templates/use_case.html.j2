@@ -12,15 +12,30 @@
     <body>
         <div class='menu'>
             <div class='checkbox'>
+                <input type='text' placeholder='Search' id='search' oninput='show_page(0, page_size.value)'>
+                <br> 
                 <div><div class="switch">
-                    <label><input type="checkbox" onchange='update_img()' id='hide_no_out'><span class="lever"></span>Hide if no outlier</label>
+                    <label><input type="checkbox" onchange='show_page(0, page_size.value)' id='hide_no_out'><span class="lever"></span>Hide no outlier</label>
                 </div></div>
                 <div><div class="switch">
-                    <label><input type="checkbox" onchange='update_img()' id='hide_null_std'><span class="lever"></span>Hide if std is null</label>
-                </div></div>
+                    <label><input type="checkbox" onchange='show_page(0, page_size.value)' id='hide_null_std'><span class="lever"></span>Hide one column</label>
+                </div></div>      
             </div>
-            <a class="waves-effect waves-light btn-small" href='/'>Go back</a>
             <h1>{{use_case}}</h1>
+
+            <div class='navigation_panel'>
+                <input class='input_page' type='hidden' id='use_case' value='{{use_case}}'>
+                <input class='input_page tooltipped' type='text' id='page_size' value='5' onchange='show_page(page_number.value, page_size.value)' data-tooltip='Page size'>
+                <input class='input_page tooltipped' type='text' id='page_number' value='0' onchange='show_page(page_number.value, page_size.value)' data-tooltip='Page number'>
+                <div class='input_page tooltipped' type='text' id='n_pages' value='0' data-tooltip='Total pages'>0</div>
+                <div class='buttons'>
+                    <div class='button_page' onclick='show_page(page_number.value - 1, page_size.value)'>Prev</div>
+                    <div class='button_page' onclick='show_page(page_number.value -=- 1, page_size.value)'>Next</div>
+                    <div class='button_page' onclick='show_page(page_number.value, page_size.value)'>Update</div>
+                </div>
+            </div>
+            
+            
         </div>
         
         <div class='plots'>

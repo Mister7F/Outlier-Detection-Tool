@@ -20,27 +20,27 @@ body{
 	background-color: var(--color-2);
 	text-align: center;
 }
-
-.use_cases{
-	display: flex;
-	flex-direction: row;
-	flex-wrap: wrap;
-	justify-content: space-around;
-	align-items: center;
-	border: 1px solid var(--color-1);
-	padding: 10px;
-	height: calc(100vh - 170px);
-	overflow-y: auto;
-	box-sizing: border-box;
+.index{
+	width: 80%;
+	text-align: center;
+	margin: auto;
 }
-
-.use_cases > div{
-	display: block;
-	border: 1px solid var(--color-1);
+.use_cases{
+	margin: auto;
 	padding: 10px;
-	box-shadow: 2px 2px 12px #aaa;
+	box-sizing: border-box;
+	border: 1px solid var(--color-1);
+	border-collapse: collapse;
+}
+.use_cases th,
+.use_cases td{
+	padding: 5px 10px;	
+	border: 1px solid var(--color-1);
+}
+.use_cases td:nth-child(4),
+.use_cases td:nth-child(3),
+.use_cases td:nth-child(1){
 	cursor: pointer;
-	border-radius: 2px;
 }
 
 .plots{
@@ -72,6 +72,8 @@ body{
 	box-sizing: border-box;
 	border: 1px solid var(--color-1);
 	margin-bottom: 15px;
+	height: 100px;
+	box-sizing: border-box;
 }
 
 .menu > a{
@@ -81,14 +83,70 @@ body{
 	margin-right: -100px;
 }
 
+.input_page{
+	width: 50px;
+	display: inline-block;
+	max-width: 50px;
+	text-align: center;
+}
+
 .checkbox > *{
-	margin-bottom: 10px;
+	margin: 0;
+	margin-bottom: 2px;
+	display: inline-block;
 }
 
 .checkbox{
 	margin-top: 25px;
 	float: right;
-	height: 0;
-	width: 200px;
+	height: 100px;
 	margin-left: -200px;
+	margin-top: 0;
+	width: 200px;
+	box-sizing: border-box;
+	padding: 5px 0;
+}
+.checkbox .switch{
+	height: 5px;
+	width: 200px;
+	margin-bottom: 22px;
+}
+.checkbox input[type="text"]{
+	height: 25px;
+}
+.button_page{
+	user-select: none;
+	cursor: pointer;
+}
+
+.menu .buttons{
+	display: flex;
+	justify-content: space-around;
+	flex-direction: row;
+
+}
+
+.navigation_panel{
+	display: block;
+	float: left;
+	height: 100px;
+	margin-top: -105px;
+	width: 250px;
+}
+
+.material-tooltip {
+    font-size: 12px;
+    height: 20px;
+}
+
+.config{
+	display: block;
+	max-width: 500px;
+	text-align: left;
+	margin: 20px auto;
+}
+
+
+*[hide]{
+	display: none;
 }

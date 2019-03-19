@@ -1,5 +1,6 @@
 import os
 import math
+import json
 import numpy as np
 import matplotlib; matplotlib.use('agg')
 import matplotlib.pyplot as plt
@@ -14,14 +15,20 @@ axis_label_size = 17
 
 
 def histogram(data, outliers, labels, title='Histogram', xlabel='Value',
-              bins=40, log=True, filename=None, show=False):
+              ylabel='Count', bins=40, log=True, filename=None, show=False):
+
     data = np.array(data).reshape(-1)
     std = data.std()
     outliers = np.array(outliers).astype(int)
-    data = [
-        np.delete(data, outliers),
-        data[outliers]
-    ]
+
+    if len(outliers):
+        data = [
+            np.delete(data, outliers),
+            data[outliers]
+        ]
+    else:
+        data = [data]
+        labels = [labels[0]]
 
     fig = plt.figure()
     fig.patch.set_alpha(0)
@@ -40,6 +47,8 @@ def histogram(data, outliers, labels, title='Histogram', xlabel='Value',
     plt.title(title, fontsize=title_size)
 
     xlabel = ' '.join(xlabel.split('_')).capitalize()
+
+    plt.ylabel(ylabel, fontsize=axis_label_size)
     plt.xlabel(xlabel, fontsize=axis_label_size)
 
     if log:
@@ -58,8 +67,21 @@ def histogram(data, outliers, labels, title='Histogram', xlabel='Value',
         plt.show()
 
     if filename is not None:
-        if not os.path.exists(os.path.split(filename)[0]):
-            os.mkdir(os.path.split(filename)[0])
-        plt.savefig(filename, transparent=True, edgecolor='none')
+        path = '/'.join(filename.split('/')[:-1])
+        if not os.path.exists(path):
+            os.mkdir(path)
+
+        plt.savefig(filename + '.svg', transparent=True, edgecolor='none')
+
+        metadata = {
+            'name': filename.split('/')[-1],
+            'n_outliers': len(outliers),
+            'one_col': int(std < 0.0000001),
+            'aggregation': filename.split('/')[-1].split('[')[0]
+        }
+
+        output = open(filename + '.json', 'w')
+        output.write(json.dumps(metadata))
+        output.close()
 
     plt.close()
