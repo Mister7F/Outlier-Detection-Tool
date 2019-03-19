@@ -11,13 +11,23 @@ from analyzers import sql_analyzer
 
 def main():
     args = arg_parse()
-    settings = load_settings('../conf/' + args['config'])
+    if args['config'] == '*':
+        for conf_file in os.listdir('../conf'):
+            settings = load_settings(f"../conf/{conf_file}")
 
-    reader = load_reader(settings['reader'])
+            reader = load_reader(settings['reader'])
 
-    for model in settings['models']:
-        print(model['name'], type='title')
-        sql_analyzer.perform_analysis(reader, model)
+            for model in settings['models']:
+                print(model['name'], type='title')
+                sql_analyzer.perform_analysis(reader, model)
+    else:
+        settings = load_settings(f"../conf/{args['config']}")
+
+        reader = load_reader(settings['reader'])
+
+        for model in settings['models']:
+            print(model['name'], type='title')
+            sql_analyzer.perform_analysis(reader, model)
 
 
 def load_settings(filename):
@@ -33,7 +43,7 @@ def load_settings(filename):
     dict[section_name][param_name]
     '''
     if not os.path.isfile(filename):
-        raise Exception('Configuration file not found [%s]' % filename)
+        raise Exception(f'Configuration file not found [{filename}]')
 
     settings = yaml.safe_load(open(filename, 'r'))
 
@@ -75,4 +85,5 @@ def load_reader(params):
 
 
 if __name__ == '__main__':
+    intro_message()
     main()

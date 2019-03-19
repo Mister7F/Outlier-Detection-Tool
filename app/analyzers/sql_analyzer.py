@@ -2,11 +2,12 @@ import numpy as np
 
 from helpers import plotter
 from helpers.print_tools import *
-from helpers.metrics_extractor import read_metric
+from helpers.metrics_extractor import read_metrics
 from helpers.outliers_detection import outlier_detection
 
 
 def perform_analysis(reader, settings):
+    str_targets = settings['targets']
     settings = _convert_cols_name_to_index(reader, settings)
     n_rows = reader.n_rows(settings['sql_query'])
 
@@ -24,14 +25,10 @@ def perform_analysis(reader, settings):
             for i, row in enumerate(rows):
                 print_progress(i_row, n_rows, prefix='Batch %i' % i_batch)
                 i_row += 1
-
-                row = [
-                    read_metric(r, settings['metrics'][j])
-                    for j, r in enumerate(row)
-                ]
+                row = read_metrics(row, settings['metrics'])
 
                 # We must ignore this row
-                if None in row:
+                if row is None or None in row:
                     continue
 
                 batch_rows.append(row)
@@ -65,16 +62,14 @@ def perform_analysis(reader, settings):
                     batch_rows[:, settings['targets']],
                     outliers,
                     labels=['Data', 'Outliers'],
-                    filename=(
-                        '../' + settings['plotting']['output'] + '/'
-                        + settings['name']
-                        + '/' + prefix + '-'.join(bucket)
-                        + '[%i] ' % i_batch
-                        + '(%f)' % std
-                        + '.png'),
+                    filename=(f"../{settings['plotting']['output']}/"
+                              f"{settings['name']}/{prefix}{'-'.join(bucket)}"
+                              f"[{i_batch}]({std}).svg"),
                     title=(settings['name']
                            + (' | ' + '-'.join(bucket)) if settings['bucket']
-                           else settings['name'])
+                           else settings['name']),
+                    xlabel=(' - '.join(str_targets) + ' | '
+                            + settings['detection']['method'])
                 )
 
             # Clear the memory

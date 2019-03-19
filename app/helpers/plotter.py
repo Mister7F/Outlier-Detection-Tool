@@ -13,8 +13,8 @@ legend_size = 13
 axis_label_size = 17
 
 
-def histogram(data, outliers, labels, xlabel='Value', bins=40,
-              log=True, filename=None, show=False, title=None):
+def histogram(data, outliers, labels, title='Histogram', xlabel='Value',
+              bins=40, log=True, filename=None, show=False):
     data = np.array(data).reshape(-1)
     std = data.std()
     outliers = np.array(outliers).astype(int)
@@ -26,10 +26,7 @@ def histogram(data, outliers, labels, xlabel='Value', bins=40,
     fig = plt.figure()
     fig.patch.set_alpha(0)
 
-    xlabel = ' '.join(xlabel.split('_'))
-    xlabel = xlabel[0].upper() + xlabel[1:]
-
-    if std < 0.0000001:
+    if std < 0.000001:
         plt.ylim(bottom=0.7)
 
     plt.hist(
@@ -40,11 +37,9 @@ def histogram(data, outliers, labels, xlabel='Value', bins=40,
         density=False
     )
 
-    if title is None:
-        plt.title(xlabel + ' - Histogram', fontsize=title_size)
-    else:
-        plt.title(title, fontsize=title_size)
+    plt.title(title, fontsize=title_size)
 
+    xlabel = ' '.join(xlabel.split('_')).capitalize()
     plt.xlabel(xlabel, fontsize=axis_label_size)
 
     if log:

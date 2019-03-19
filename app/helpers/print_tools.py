@@ -83,3 +83,16 @@ def print_progress(iteration, total, prefix=''):
     if iteration >= total:
         sys.stdout.write('\n')
         print_progress.output = ''
+
+
+def intro_message():
+    sys.stdout.write(
+        r'''
+   ____        _   _ _             _____       _            _
+  / __ \      | | | (_)           |  __ \     | |          | |
+ | |  | |_   _| |_| |_  ___ _ __  | |  | | ___| |_ ___  ___| |_ ___  _ __
+ | |  | | | | | __| | |/ _ \ '__| | |  | |/ _ \ __/ _ \/ __| __/ _ \| '__|
+ | |__| | |_| | |_| | |  __/ |    | |__| |  __/ ||  __/ (__| || (_) | |
+  \____/ \__,_|\__|_|_|\___|_|    |_____/ \___|\__\___|\___|\__\___/|_|
+
+  An outlier detection tool''' + '\n\n')

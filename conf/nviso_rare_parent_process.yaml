@@ -4,7 +4,7 @@ reader:
     scroll_size: 10000
     timeout: 90s
 models:
-    -   name: Rare processes
+    -   name: NVISO - Rare parent process
         sql_query: >
             SELECT OsqueryFilter.name as process_name,
                    OsqueryFilter.parentname as parent_name,
@@ -18,8 +18,9 @@ models:
         targets: [count]
         batch_size: 10000
         detection:
-            method: stdev_low
+            method: stdev
             sensitivity: 10
+            trigger_on: low
         outlier_message:
             title: This parent is rare
             content: 'Process name: {process_name} - Parent: {parent_name} - Count: {count}'

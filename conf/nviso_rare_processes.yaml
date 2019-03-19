@@ -4,7 +4,7 @@ reader:
     scroll_size: 10000
     timeout: 90s
 models:
-    -   name: Rare processes
+    -   name: NVISO - Rare process
         sql_query: >
             SELECT COUNT(DISTINCT meta.hostname) as n_hosts, OsqueryFilter.name as process_name            
             FROM nviso_events_osquery
@@ -15,8 +15,9 @@ models:
         targets: [n_hosts]
         batch_size: 10000
         detection:
-            method: less_than_sensitivity
-            sensitivity: 2
+            method: mad
+            trigger_on: low
+            sensitivity: 3
         outlier_message:
             title: This process is rare
             content: 'Process name: {process_name} - Present in: {n_hosts} host(s)'

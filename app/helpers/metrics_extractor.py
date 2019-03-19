@@ -3,20 +3,41 @@ import base64
 from datetime import date, datetime
 
 
-def read_metric(value, metric):
+def read_metrics(values, metrics):
     '''
     Convert the input value to the metric
     If return None, the row must be ignored !
     '''
-    if value is None:
-        return None
+    if not hasattr(read_metrics, 'prev_row'):
+        read_metrics.prev_row = None
 
-    if '_' + metric not in globals() or metric.startswith('_'):
-        raise ValueError('Wrong metric [%s]' % metric)
+    converted_values = []
+    for value, metric in zip(values, metrics):
+        if value is None:
+            return None
 
-    metric = globals()['_' + metric]
+        if metric.startswith('python_eval'):
+            value = _python_eval(values, read_metrics.prev_row, metric)
 
-    return metric(value)
+        else:
+            if '_' + metric not in globals() or metric.startswith('_'):
+                raise ValueError('Wrong metric [%s]' % metric)
+
+            method = globals()['_' + metric]
+            value = method(value)
+
+        converted_values.append(value)
+
+    read_metrics.prev_row = values
+
+    return converted_values
+
+
+def _python_eval(row, prev_row, metric):
+    # Todo: check if it's safe...
+    python_code = metric[12:-1]
+    python_code = python_code.replace('__', '')
+    return eval(python_code, {}, {'row': row, 'prev_row': prev_row})
 
 
 def _b64_encoded(value):

@@ -4,7 +4,7 @@ reader:
     scroll_size: 10000
     timeout: 90s
 models:
-    -   name: Rare start hour
+    -   name: NVISO - Rare start hour
         sql_query: >
             SELECT meta.hostname AS hostname,
                    MIN(timestamp) AS start

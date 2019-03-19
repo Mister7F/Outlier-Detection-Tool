@@ -14,7 +14,7 @@ def imgs(use_case, img):
 
     imgs = os.listdir('../plots/' + use_case)
 
-    if img not in imgs or not img.endswith('.png'):
+    if img not in imgs or not (img.endswith('.png') or img.endswith('.svg')):
         return 'Error'
 
     return send_from_directory('../plots/' + use_case, img)
@@ -30,7 +30,7 @@ def use_case(use_case):
 
     imgs = [
         (i, i.startswith('*'), float(i.split('(')[-1].split(')')[0]) < 0.00001)
-        for i in imgs if i.endswith('.png')
+        for i in imgs if (i.endswith('.png') or i.endswith('.svg'))
     ]
 
     return render_template(
