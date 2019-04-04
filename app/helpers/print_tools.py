@@ -1,4 +1,5 @@
 import sys
+import math
 
 
 def print(*data, type='info'):
@@ -17,9 +18,11 @@ def print(*data, type='info'):
     ENDC = '\033[0m'
 
     if type == 'title':
+        min_size = 50
         data = data[0].replace('_', ' ').capitalize()
-        data = '= ' + data + ' ='
-        sep = '=' * len(data)
+        padd = min_size - len(data) - 2
+        data = '#' + ' ' * (padd // 2) + data + ' ' * math.ceil(padd/2) + '#'
+        sep = '# ' + '=' * (len(data) - 4) + ' #'
         data = sep + '\n' + data + '\n' + sep
         data = [data]
 

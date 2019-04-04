@@ -1,12 +1,25 @@
+import os
+import json
+import time
 import numpy as np
 
 from helpers import plotter
-from helpers.print_tools import *
+from helpers.print_tools import print, print_progress
 from helpers.metrics_extractor import read_metrics
 from helpers.outliers_detection import outlier_detection
 
 
 def perform_analysis(reader, settings):
+    plot_directory = f"../{settings['plotting']['output']}/{settings['name']}"
+
+    # Save current config
+    settings['run_time'] = time.time()
+    if not os.path.exists(plot_directory):
+        os.mkdir(plot_directory)
+    output = open(plot_directory + '/_general.json', 'w')
+    output.write(json.dumps(settings))
+    output.close()
+
     str_targets = settings['targets']
     settings = _convert_cols_name_to_index(reader, settings)
     n_rows = reader.n_rows(settings['sql_query'])
@@ -53,24 +66,22 @@ def perform_analysis(reader, settings):
 
             process_outliers(batch_rows, outliers, settings)
 
-            i_batch += 1
-
             if 'plotting' in settings and settings['plotting']['enable']:
                 prefix = '*' if len(outliers) else ''
-                std = batch_rows[:, settings['targets']].std()
                 plotter.histogram(
                     batch_rows[:, settings['targets']],
                     outliers,
                     labels=['Data', 'Outliers'],
-                    filename=(f"../{settings['plotting']['output']}/"
-                              f"{settings['name']}/{prefix}{'-'.join(bucket)}"
-                              f"[{i_batch}]({std}).svg"),
+                    filename=(plot_directory + f"/{prefix}{'-'.join(bucket)}"
+                              + f"[{str(i_batch)}]"),
                     title=(settings['name']
                            + (' | ' + '-'.join(bucket)) if settings['bucket']
                            else settings['name']),
                     xlabel=(' - '.join(str_targets) + ' | '
                             + settings['detection']['method'])
                 )
+
+            i_batch += 1
 
             # Clear the memory
             del batch_rows
@@ -99,7 +110,7 @@ def process_outliers(rows, outliers, settings):
     Params
     ======
     - rows (np.array): Rows returned by the SQL query
-    - outliers (list): List of index considered as outlier
+    - outliers (list): List of index considered to be outliers
     '''
     if not len(outliers):
         return

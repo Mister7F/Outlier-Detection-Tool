@@ -2,8 +2,6 @@ __pycache__/
 python-env/
 *.py[cod]
 *$py.class
-
-# C extensions
+*/log.txt
 *.so
-
 plots/*

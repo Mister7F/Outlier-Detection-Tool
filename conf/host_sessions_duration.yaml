@@ -1,0 +1,32 @@
+reader:
+    type: ES
+    url: 'http://127.0.0.1:9200'
+    scroll_size: 10000
+    timeout: 90s
+models:
+    -   name: Host - Sessions duration
+        sql_query: >
+            SELECT LogHost AS hostname, LogonID AS session_id,
+                   UserName AS username, LogonType AS logon_type,
+                   MAX(Time) - MIN(Time) AS duration
+            FROM host_events
+            WHERE (EventID=4624 OR EventID=4634)
+                  AND LogonID IS NOT NULL
+            GROUP BY LogHost, LogonID, UserName, LogonType
+            HAVING COUNT(*) > 1
+            ORDER BY LogonType
+        bucket: [logon_type]
+        metrics: [str, str, str, str, float]
+        targets: [duration]
+        batch_size: 10000
+        detection:
+            method: lof_stdev
+            trigger_on: low
+            sensitivity: 3
+            n_neighbors: 1000
+        outlier_message:
+            title: Strange session duration
+            content: 'Username: {username} - Duration: {duration}'
+        plotting:
+            enable: True
+            output: plots

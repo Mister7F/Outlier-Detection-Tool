@@ -91,7 +91,7 @@ def _lof(data, sensitivity, n_neighbors, trigger_on='low'):
         return []
 
     if data.ndim == 1:
-        data = data.reshape(-1, 1)
+        data = data-np.reshape(-1, 1)
 
     clf = LocalOutlierFactor(
         novelty=True,
@@ -159,7 +159,7 @@ def _pct_of_avg_value(data, sensitivity, trigger_on):
 
     if trigger_on == 'low':
         return np.arange(data.shape[0])[data < avg * pct]
-
+    # High
     return np.arange(data.shape[0])[data > avg * pct]
 
 

@@ -1,11 +1,9 @@
 import os
-import json
 import yaml
 import argparse
 
-import helpers.print_tools
 from readers.es_reader import ES
-from helpers.print_tools import *
+from helpers.print_tools import print, intro_message
 from analyzers import sql_analyzer
 
 
@@ -54,7 +52,7 @@ def arg_parse():
     '''
     Parse the arguments
 
-    Raturn
+    Return
     ======
     dict[arg_name]
     '''

@@ -1,20 +1,60 @@
-# Outiliers detection tools
+# Outlier detection tools
 Based on ee-outliers
 
 Use SQL query to extract columns from the database, and then apply the metrics on each columns.
 
-Many outlier detection methods are availables
+Many outliers detection methods are available
 
 One model to rule them all
 
 # Start
 
-> source ./python-env/bin/activate
-> 
-> cd app
-> 
-> python3.7 main.py --mode interactive --config config.yaml
+> `source ./python-env/bin/activate`
+>
+> `cd app`
+>
+> `python3.7 main.py --mode interactive --config config.yaml`
 
+You can run all the models at once
+> `python3.7 main.py --mode interactive --config "*"`
+
+# Parameters
+Here is an example of a configuration file.
+
+First, we have the parameter for the reader (here we want to use Elasticsearch).
+
+Then, we have a list of model.
+```yaml
+reader:
+    type: ES
+    url: 'http://127.0.0.1:9200'
+    scroll_size: 10000
+    timeout: 90s
+models:
+    -   name: NVISO - Rare parent process
+        sql_query: >
+            SELECT OsqueryFilter.name as process_name,
+                   OsqueryFilter.parentname as parent_name,
+                   COUNT(*) as count
+            FROM nviso_events_osquery
+            WHERE OsqueryFilter.pid IS NOT NULL
+            GROUP BY OsqueryFilter.name, OsqueryFilter.parentname
+            ORDER BY OsqueryFilter.name
+        bucket: [process_name]
+        metrics: [str, str, int]
+        targets: [count]
+        batch_size: 10000
+        detection:
+            method: stdev
+            sensitivity: 10
+            trigger_on: low
+        outlier_message:
+            title: This parent is rare
+            content: 'Process name: {process_name} - Parent: {parent_name} - Count: {count}'
+        plotting:
+            enable: True
+            output: plots
+```
 
 # Detection
 Default values are in bold.
@@ -37,10 +77,10 @@ Each metric will be apply to the corresponding column
 ```yaml
 models:
 	-	name: The model name
-		sql_query: SELECT name, gain, loss, total 
+		sql_query: SELECT name, gain, loss, total
 		metrics: [str, int, int, 'python_eval(row[1] - row[2])']
 ```
-Availables metrics:
+Available metrics:
 - python_eval
 	- Expl: 'python_eval(row[0] + row[1] * prev_row[3])'
 	- You have access to
@@ -67,8 +107,7 @@ models:
             output: plots
 ```
 
-Then, you can visualise them on a website
+Then, you can visualize them on a website
 > cd website
-> 
+>
 > python3 index.py
- 

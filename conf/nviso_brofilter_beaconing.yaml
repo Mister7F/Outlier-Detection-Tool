@@ -4,11 +4,14 @@ reader:
     scroll_size: 10000
     timeout: 90s
 models:
-    -   name: NVISO - HTTP Beaconing
+    -   name: NVISO - Beaconing
         sql_query: >
             SELECT BroFilter.id_orig_h as origin,
                    BroFilter.server_name as destination,
-                   MINUTE_OF_DAY(timestamp) * 60 + SECOND_OF_MINUTE(timestamp) AS time,
+                   CAST(YEAR(timestamp) AS FLOAT) * 365 * 24 * 60 * 60
+                   + DAY_OF_YEAR(timestamp) * 24 * 60 * 60
+                   + MINUTE_OF_DAY(timestamp) * 60
+                   + SECOND_OF_MINUTE(timestamp) AS time,
                    0 AS elapsed_time
             FROM nviso_brofilter
             ORDER BY BroFilter.id_orig_h, BroFilter.server_name, timestamp
@@ -20,7 +23,7 @@ models:
             method: lof_stdev
             n_neighbors: 500
             trigger_on: high
-            sensitivity: -0.1
+            sensitivity: 1
         outlier_message:
             title: This connection sends data with a current interval
             content: 'Process name: {origin} - Child: {destination} - Elapsed time: {elapsed_time}'

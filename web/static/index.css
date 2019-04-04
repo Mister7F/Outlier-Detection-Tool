@@ -83,6 +83,10 @@ body{
 	margin-right: -100px;
 }
 
+.menu > h1{
+	cursor: pointer;
+}
+
 .input_page{
 	width: 50px;
 	display: inline-block;
