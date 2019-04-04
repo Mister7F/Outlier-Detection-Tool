@@ -64,13 +64,6 @@ def arg_parse():
         required=True
     )
 
-    arg_parser.add_argument(
-        '--mode',
-        help='Running mode',
-        required=True,
-        choices=['interactive', 'deamon', 'tests']
-    )
-
     return vars(arg_parser.parse_args())
 
 

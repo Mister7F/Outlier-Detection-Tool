@@ -59,15 +59,20 @@ models:
 # Detection
 Default values are in bold.
 
-| method | sensitivity |trigger_on|n_neighbors|
+| trigger_method | trigger_sensitivity |trigger_on|n_neighbors|
 |:------:|:-----------:|:--------:|:---------:|
 |stdev|[0-∞]|[**all**, low, high]| - |
 |z_score|[0-∞]|[**all**, low, high]| - |
 |mad|[0-∞]|[**all**, low, high]| - |
 |lof|[0-100]|[**low**, high]| [0-∞] |
-|lof_stdev|[0-∞]|[**low**, high]| [0-∞] |
-|less_than_sensitivity|[0-∞]| - | - |
+|lof|[0-100]|[**low**, high]| [0-∞] |
+|isolation_forest|[0-100]|[**low**, high]| - |
+|float|[0-∞]| [low, high] | - |
 |pct_of_avg_value|[0-100]|[low, high]| - |
+|pct_of_max_value|[0-100]|[low, high]| - |
+|pct_of_min_value|[100-∞]|[low, high]| - |
+|pct_of_median_value|[0-100]|[low, high]| - |
+|percentile|[0-100]|[low, high]| - |
 |trigger_all| - | - | - |
 
 # Metrics

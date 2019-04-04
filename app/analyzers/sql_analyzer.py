@@ -60,8 +60,8 @@ def perform_analysis(reader, settings):
             batch_rows = np.array(batch_rows, dtype='object')
 
             outliers = outlier_detection(
-                settings['detection'],
-                batch_rows[:, settings['targets']]
+                batch_rows[:, settings['targets']],
+                settings['detection']
             )
 
             process_outliers(batch_rows, outliers, settings)

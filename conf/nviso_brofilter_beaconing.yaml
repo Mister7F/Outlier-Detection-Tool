@@ -8,22 +8,19 @@ models:
         sql_query: >
             SELECT BroFilter.id_orig_h as origin,
                    BroFilter.server_name as destination,
-                   CAST(YEAR(timestamp) AS FLOAT) * 365 * 24 * 60 * 60
-                   + DAY_OF_YEAR(timestamp) * 24 * 60 * 60
-                   + MINUTE_OF_DAY(timestamp) * 60
-                   + SECOND_OF_MINUTE(timestamp) AS time,
+                   CAST(timestamp AS FLOAT) AS time,
                    0 AS elapsed_time
             FROM nviso_brofilter
             ORDER BY BroFilter.id_orig_h, BroFilter.server_name, timestamp
         bucket: [origin, destination]
-        metrics: [str, str, int, 'python_eval(row[2] - prev_row[2] if prev_row else None)']
+        metrics: [str, str, int, 'python_eval(abs(row[2] - prev_row[2]) if prev_row else None)']
         targets: [elapsed_time]
         batch_size: 10000
         detection:
-            method: lof_stdev
-            n_neighbors: 500
+            method: isolation_forest
+            # Trigger on high density
             trigger_on: high
-            sensitivity: 1
+            sensitivity: 60
         outlier_message:
             title: This connection sends data with a current interval
             content: 'Process name: {origin} - Child: {destination} - Elapsed time: {elapsed_time}'
